@@ -16,14 +16,7 @@ export default class ProcCom {
         let argv = command.split(/\s+/);
         const t = this._log.startTimer();
         const cmd = _cmdName(command);
-        let proc;
-        try {
-            proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
-        } catch (e) {
-            this._log.endTimer(t, 'CALL', {cmd, blocking: false, success: false});
-            this._log.error('subprocess creation failed', e);
-            throw e;
-        }
+        const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
         const [stdout, stderr] = await proc.communicate_utf8_async(null, null);
         const success = proc.get_successful();
         this._log.endTimer(t, 'CALL', {cmd, blocking: false, success});

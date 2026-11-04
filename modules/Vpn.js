@@ -43,40 +43,35 @@ export default class Vpn {
     async _httpGet(url) {
         const domain = url.replace(/^https?:\/\//, '').split('/')[0];
         const t = this._log.startTimer();
-        try {
-            const msg = Soup.Message.new(`GET`, url);
-            let result;
-            if (this._soupVersion < 2) {
-                // Soup < 2: keep sync
-                this._session.send(msg, null);
-                result = JSON.parse(this._vpnUtils.getString(msg.response_body.data));
-                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: true, success: true});
-            } else if (this._soupVersion >= 2 && this._soupVersion < 3) {
-                const inputStream = await this._session.send_async(msg, GLib.PRIORITY_DEFAULT, null);
-                const chunks = [];
-                while (true) {
-                    const chunk = await inputStream.read_bytes_async(4096, GLib.PRIORITY_DEFAULT, null);
-                    if (chunk.get_size() === 0) break;
-                    chunks.push(chunk);
-                }
-                result = JSON.parse(new TextDecoder('utf-8').decode(this._concatBytes(chunks)));
+        const msg = Soup.Message.new(`GET`, url);
+        let result;
+        if (this._soupVersion < 2) {
+            // Soup < 2: keep sync
+            this._session.send(msg, null);
+            result = JSON.parse(this._vpnUtils.getString(msg.response_body.data));
+            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: true, success: true});
+        } else if (this._soupVersion >= 2 && this._soupVersion < 3) {
+            const inputStream = await this._session.send_async(msg, GLib.PRIORITY_DEFAULT, null);
+            const chunks = [];
+            while (true) {
+                const chunk = await inputStream.read_bytes_async(4096, GLib.PRIORITY_DEFAULT, null);
+                if (chunk.get_size() === 0) break;
+                chunks.push(chunk);
+            }
+            result = JSON.parse(new TextDecoder('utf-8').decode(this._concatBytes(chunks)));
+            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
+        } else {
+            const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null);
+            if (msg.get_status() === Soup.Status.OK) {
+                result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
                 this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
             } else {
-                const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null);
-                if (msg.get_status() === Soup.Status.OK) {
-                    result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
-                    this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
-                } else {
-                    this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
-                    this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
-                    return null;
-                }
+                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
+                this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
+                return null;
             }
-            return result;
-        } catch (e) {
-            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
-            throw e;
         }
+        return result;
     }
 
     _concatBytes(chunks) {
