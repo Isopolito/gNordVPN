@@ -1,9 +1,7 @@
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import Vpn from './Vpn.js';
-import Signals from './Signals.js';
 import Favorites from './Favorites.js';
 import MenuBase from './MenuBase.js';
 import * as Common from './common.js';
@@ -20,8 +18,6 @@ export default class ConnectionMenu extends MenuBase {
         this._favConnectionItems = [];
         this._isBuilt = false;
         this._menuSeperator = null;
-        this._destroyMap = {};
-        this._pendingIdleIds = [];
         this._buildGen = 0;
         this._buildInFlight = false;
         // Marks teardown: a build that was in flight when destroy() ran must not retry.
@@ -29,7 +25,6 @@ export default class ConnectionMenu extends MenuBase {
 
         this._favorites = new Favorites(settings);
         this._vpn = new Vpn(settings);
-        this._signals = new Signals();
 
         this._connectionLabel = connectionLabel;
         this._connectionType = connectionType;
@@ -64,12 +59,7 @@ export default class ConnectionMenu extends MenuBase {
         // Kick off a new fetch on idle so it runs after the current task completes.
         // If _buildInFlight is still true at that point, tryBuild's gate discards and returns;
         // the in-flight fetch will see a gen mismatch, and _throttledMenuBuild retries later.
-        const id = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._pendingIdleIds = this._pendingIdleIds.filter(i => i !== id);
-            this.tryBuild(running).catch(e => this._log.error('tryBuild after rebuild failed', e));
-            return GLib.SOURCE_REMOVE;
-        });
-        this._pendingIdleIds.push(id);
+        this._scheduleIdle(() => this.tryBuild(running).catch(e => this._log.error('tryBuild after rebuild failed', e)));
     }
 
     _buildPlaceHolderMenuItem() {
@@ -78,7 +68,7 @@ export default class ConnectionMenu extends MenuBase {
 
     _buildConnectionMenuItem(connection, isFavorite) {
         const menuItem = new PopupMenu.PopupMenuItem(connection);
-        const menuItemClickId = menuItem.connect(`activate`, (actor, event) => {
+        const menuItemClickId = this._connectTracked(menuItem, `activate`, () => {
             const target = this._connections[connection];
             const connType = this._connectionType;
             if (!target || this._vpn.isConnectThrottled()) return;
@@ -86,19 +76,9 @@ export default class ConnectionMenu extends MenuBase {
             this._connectionCallback(Constants.status.reconnecting, [connType, target]);
         });
 
-        this._signals.register(menuItemClickId, () => menuItem.disconnect(menuItemClickId));
-
-        const icofavBtn = super.buildFavIcon(isFavorite);
-        menuItem.add_child(icofavBtn);
-        menuItem.icofavBtn = icofavBtn;
-        this._destroyMap[connection] = {menuItemClickId, menuItem, icofavBtn};
-        menuItem.favoritePressId = icofavBtn.connect(`button-press-event`, () => {
-            // Defer both the GSettings write and widget mutation to idle so this
-            // callback doesn't destroy the menu item currently dispatching the event.
-            this._scheduleToggle(connection, isFavorite);
-        });
-
-        this._signals.register(menuItem.favoritePressId, () => icofavBtn.disconnect(menuItem.favoritePressId));
+        // Defer both the GSettings write and widget mutation to idle so this
+        // callback doesn't destroy the menu item currently dispatching the event.
+        this._addFavoriteButton(connection, menuItem, isFavorite, menuItemClickId, () => this._scheduleToggle(connection, isFavorite));
         return menuItem;
     }
 
@@ -106,13 +86,10 @@ export default class ConnectionMenu extends MenuBase {
         // Each click gets its own idle so rapid clicks on different rows all land.
         // Writing GSettings on idle (not in the button-press handler) prevents
         // destroying the menu item that is currently dispatching the event.
-        const id = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._pendingIdleIds = this._pendingIdleIds.filter(i => i !== id);
+        this._scheduleIdle(() => {
             if (isFavorite) this._favorites.remove(this._favoritesKey, connection);
             else this._favorites.add(this._favoritesKey, connection, this._connections[connection]);
-            return GLib.SOURCE_REMOVE;
         });
-        this._pendingIdleIds.push(id);
     }
 
     _toggleConnectionMenuItem(connection, isFavorite) {
@@ -167,8 +144,7 @@ export default class ConnectionMenu extends MenuBase {
         this._cancellable.cancel();
         this._vpn.destroy();
         ++this._buildGen;
-        this._pendingIdleIds.forEach(id => GLib.Source.remove(id));
-        this._pendingIdleIds = [];
+        this._removePendingIdles();
         this._signals.disconnectAll();
         this._connectionMenu.destroy();
         this._connectionMenuItems = [];
@@ -199,12 +175,7 @@ export default class ConnectionMenu extends MenuBase {
             // If gen still matches, the fetch completed legitimately (no-data / error / success);
             // normal refresh cycles handle the next attempt, so no retry is needed here.
             if (gen !== this._buildGen && !this._cancellable.is_cancelled()) {
-                const retryId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    this._pendingIdleIds = this._pendingIdleIds.filter(i => i !== retryId);
-                    this.tryBuild(running).catch(e => this._log.error('tryBuild retry failed', e));
-                    return GLib.SOURCE_REMOVE;
-                });
-                this._pendingIdleIds.push(retryId);
+                this._scheduleIdle(() => this.tryBuild(running).catch(e => this._log.error('tryBuild retry failed', e)));
             }
         }
 
