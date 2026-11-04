@@ -39,6 +39,7 @@ delete_random_files_and_directories() {
         -o -name "*.sh" \
         -o -name "package-lock.json" \
         -o -name "eslint.config.js" \
+        -o -name "README.md" \
         -o -name "makegnordext" \
         -o -name ".*.swp" \
         -o -name "*.swp" \
@@ -53,6 +54,9 @@ delete_random_files_and_directories() {
         -o -name ".serena" \
         -o -name ".codex" \
     \) -exec rm -rf {} +
+
+    # img/ only held PNGs, which are deleted above
+    find . -type d -empty -delete
 }
 
 create_zip() {
