@@ -2,6 +2,8 @@ import Gio from 'gi://Gio';
 
 import Logger from './Logger.js';
 
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
+
 function _cmdName(command) {
     return command.trim().split(/\s+/)[0].split('/').pop();
 }
@@ -9,7 +11,6 @@ function _cmdName(command) {
 export default class ProcCom {
     constructor() {
         this._log = new Logger('ProcCom');
-        Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
     }
 
     // Only read-only commands pass a cancellable. Cancelling it rejects the call and kills the process.

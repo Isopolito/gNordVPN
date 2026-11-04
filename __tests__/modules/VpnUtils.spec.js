@@ -61,16 +61,6 @@ describe('VpnUtils', () => {
         });
     });
 
-    describe('getString', () => {
-        it('decodes a Uint8Array', () => {
-            expect(vpnUtils.getString(new TextEncoder().encode('Hello, world!'))).toBe('Hello, world!');
-        });
-
-        it('stringifies other input', () => {
-            expect(vpnUtils.getString('Hello, world!')).toBe('Hello, world!');
-        });
-    });
-
     describe('resolveSettingsValue', () => {
         it('maps "enabled" to true and "disabled" to false', () => {
             expect(vpnUtils.resolveSettingsValue('enabled')).toBe(true);

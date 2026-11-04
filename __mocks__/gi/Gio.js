@@ -32,4 +32,4 @@ class Cancellable {
 
 const IOErrorEnum = {CANCELLED: 19, FAILED: 0};
 
-export default {Cancellable, IOErrorEnum};
+export default {Cancellable, IOErrorEnum, _promisify() {}, Subprocess: {prototype: {}}};

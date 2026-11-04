@@ -83,7 +83,7 @@ export default class CommonFavorite extends MenuBase {
         this._signals.register(menuItemClickId, () => menuItem.disconnect(menuItemClickId));
 
         const icofavBtn = super.buildFavIcon(true);
-        menuItem.actor.add_child(icofavBtn);
+        menuItem.add_child(icofavBtn);
         menuItem.icofavBtn = icofavBtn;
         this._destroyMap[favorite] = {menuItemClickId, menuItem, icofavBtn};
         menuItem.favoritePressId = icofavBtn.connect(`button-press-event`, () => {

@@ -89,7 +89,7 @@ export default class ConnectionMenu extends MenuBase {
         this._signals.register(menuItemClickId, () => menuItem.disconnect(menuItemClickId));
 
         const icofavBtn = super.buildFavIcon(isFavorite);
-        menuItem.actor.add_child(icofavBtn);
+        menuItem.add_child(icofavBtn);
         menuItem.icofavBtn = icofavBtn;
         this._destroyMap[connection] = {menuItemClickId, menuItem, icofavBtn};
         menuItem.favoritePressId = icofavBtn.connect(`button-press-event`, () => {

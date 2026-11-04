@@ -9,13 +9,6 @@ export default class VpnUtils {
         return filteredLines.sort(); // Sort and return the valid country names
     };
 
-    getString = (data) => {
-        const decoder = new TextDecoder('utf-8');
-        return data instanceof Uint8Array
-            ? decoder.decode(data)
-            : data.toString();
-    }
-
     resolveSettingsValue(text) {
         if (!text) return;
         const normalizedText = text.trim();

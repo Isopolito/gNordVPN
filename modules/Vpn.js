@@ -20,6 +20,8 @@ const CMD_DISCONNECT = `nordvpn d`;
 const CMD_LOGIN = `nordvpn login`;
 const CMD_LOGOUT = `nordvpn logout`;
 
+Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
+
 // Shared by every Vpn instance in this process, so a login started before a disable and enable is still the only one.
 let _loginInFlight = false;
 
@@ -30,17 +32,9 @@ export default class Vpn {
         this._procCom = new ProcCom();
         this._vpnUtils = new VpnUtils();
         this._session = Soup.Session.new();
-        this._soupVersion = Soup.get_major_version();
         this._lastConnectedAt = 0;
         // Cancels read-only polls and lookups. State-changing commands never use it, so they finish after destroy().
         this._cancellable = new Gio.Cancellable();
-
-        if (this._soupVersion >= 3) {
-            Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
-        } else if (this._soupVersion >= 2) {
-            Gio._promisify(Soup.Session.prototype, 'send_async');
-            Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async');
-        }
     }
 
     destroy() {
@@ -52,45 +46,15 @@ export default class Vpn {
         const domain = url.replace(/^https?:\/\//, '').split('/')[0];
         const t = this._log.startTimer();
         const msg = Soup.Message.new(`GET`, url);
-        let result;
-        if (this._soupVersion < 2) {
-            // Soup < 2: keep sync
-            this._session.send(msg, null);
-            result = JSON.parse(this._vpnUtils.getString(msg.response_body.data));
-            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: true, success: true});
-        } else if (this._soupVersion >= 2 && this._soupVersion < 3) {
-            const inputStream = await this._session.send_async(msg, GLib.PRIORITY_DEFAULT, null);
-            const chunks = [];
-            while (true) {
-                const chunk = await inputStream.read_bytes_async(4096, GLib.PRIORITY_DEFAULT, null);
-                if (chunk.get_size() === 0) break;
-                chunks.push(chunk);
-            }
-            result = JSON.parse(new TextDecoder('utf-8').decode(this._concatBytes(chunks)));
-            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
-        } else {
-            const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, this._cancellable);
-            if (msg.get_status() === Soup.Status.OK) {
-                result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
-                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
-            } else {
-                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
-                this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
-                return null;
-            }
+        const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, this._cancellable);
+        if (msg.get_status() !== Soup.Status.OK) {
+            this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
+            this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
+            return null;
         }
+        const result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
+        this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
         return result;
-    }
-
-    _concatBytes(chunks) {
-        const totalLen = chunks.reduce((acc, c) => acc + c.get_size(), 0);
-        const buf = new Uint8Array(totalLen);
-        let offset = 0;
-        for (const chunk of chunks) {
-            buf.set(chunk.get_data(), offset);
-            offset += chunk.get_size();
-        }
-        return buf;
     }
 
     // A successful (exit 0) `nordvpn status` means nordvpnd is running.

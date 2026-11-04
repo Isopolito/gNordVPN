@@ -130,7 +130,7 @@ export default GObject.registerClass(
 
         _nextDelaySec() {
             return RefreshPolicy.nextDelaySec({
-                stateName: this._lastStatus?.currentState?.stateName,
+                stateName: this._lastStatus?.currentState.stateName,
                 menuOpen: this._menuOpen,
                 transitionalSinceMs: this._transitionalSince,
                 nowMs: Date.now(),
@@ -183,7 +183,7 @@ export default GObject.registerClass(
 
                 this._log.endTimer(t, 'SPAN', {
                     operation: '_refresh',
-                    state: status.currentState?.stateName,
+                    state: status.currentState.stateName,
                     nextDelay: this._nextDelaySec()
                 });
             } catch (e) {
@@ -220,16 +220,11 @@ export default GObject.registerClass(
 
         _updateMenu(status) {
             if (!this._statusPopup || !this._statusLabel) return;
-            if (!this._statusLabel.text) return;
 
             // Set the status text on the menu
             this._statusLabel.text = status.connectStatus;
 
-            const actor = this._statusPopup.get_label_actor();
-            if (!actor) return;
-            if (actor.set_text) {
-                actor.set_text(status.connectStatus);
-            }
+            this._statusPopup.get_label_actor().set_text(status.connectStatus);
 
             const menu = this._statusPopup.menu;
             menu.removeAll();
@@ -264,16 +259,16 @@ export default GObject.registerClass(
             }
 
             // Activate / deactivate menu items
-            this._connectMenuItem.actor.visible = status.currentState.canConnect;
-            this._disconnectMenuItem.actor.visible = status.currentState.canDisconnect;
+            this._connectMenuItem.visible = status.currentState.canConnect;
+            this._disconnectMenuItem.visible = status.currentState.canDisconnect;
 
             this._countryMenu.showHide(status.currentState.showLists);
             this._cityMenu.showHide(status.currentState.showLists);
             this._serverMenu.showHide(status.currentState.showLists);
             this._commonFavorite.showHide(status.currentState.showLists && this._extSettings.get_boolean(`commonfavorite`));
 
-            this._loginMenuItem.actor.visible = !status.loggedin && this._extSettings.get_boolean(`showlogin`);
-            this._logoutMenuItem.actor.visible = status.loggedin && this._extSettings.get_boolean(`showlogout`);
+            this._loginMenuItem.visible = !status.loggedin && this._extSettings.get_boolean(`showlogin`);
+            this._logoutMenuItem.visible = status.loggedin && this._extSettings.get_boolean(`showlogout`);
         }
 
         async _connect() {
@@ -317,7 +312,7 @@ export default GObject.registerClass(
         }
 
         _syncUptime(status) {
-            if (status.currentState?.stateName !== Constants.states.CONNECTED) {
+            if (status.currentState.stateName !== Constants.states.CONNECTED) {
                 this._stopUptimeClock(true);
                 return;
             }
@@ -333,7 +328,7 @@ export default GObject.registerClass(
 
         // Runs the 1s tick only while CONNECTED and the CONNECTED template shows a live uptime token.
         _updateUptimeClock() {
-            if (this._lastStatus?.currentState?.stateName !== Constants.states.CONNECTED) {
+            if (this._lastStatus?.currentState.stateName !== Constants.states.CONNECTED) {
                 this._stopUptimeClock(true);
                 return;
             }

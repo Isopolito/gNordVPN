@@ -4,9 +4,7 @@ export default class Signals {
     }
     
     register(id, callback) {
-        if (this._ids[id] && typeof this._ids[id] === 'function') {
-            this._ids[id]();
-        }
+        if (this._ids[id]) this._ids[id]();
         
         this._ids[id] = callback;
     }
@@ -14,7 +12,7 @@ export default class Signals {
     disconnect(ids) {
         for (const id of Array.isArray(ids) ? ids : [ids]) {
             const callback = this._ids[id];
-            if (typeof callback !== 'function') continue;
+            if (!callback) continue;
             delete this._ids[id];
             callback();
         }
@@ -22,7 +20,7 @@ export default class Signals {
     
     disconnectAll() {
         for (const callback of Object.values(this._ids)) {
-            if (typeof callback === 'function') callback();
+            callback();
         }
         
         this._ids = {};
