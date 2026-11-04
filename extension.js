@@ -30,7 +30,6 @@ export default class GnordVpnLocal extends Extension {
     disable() {
         this._log.debug('disable() called');
         if (this._vpnIndicator) {
-            this._vpnIndicator.disable();
             this._vpnIndicator.destroy();
             this._vpnIndicator = null;
         }

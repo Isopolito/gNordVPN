@@ -1,4 +1,5 @@
 import St from 'gi://St';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -15,6 +16,7 @@ import CommonFavorite from './CommonFavorite.js';
 import PanelIcon from './PanelIcon.js';
 import * as Constants from './constants.js';
 import Logger from './Logger.js';
+import {isCancelled} from './common.js';
 import * as RefreshPolicy from './RefreshPolicy.js';
 import * as PanelText from './PanelText.js';
 
@@ -23,7 +25,9 @@ export default GObject.registerClass(
         _log = new Logger('VpnIndicator');
         _isLoggedIn = false;
         _isRefreshing = false;
-        _isDestroyed = false;
+        // Cancelled first in destroy(): pending status and login reads reject, and commands that were already
+        // running check it before touching the indicator.
+        _cancellable = new Gio.Cancellable();
         _pendingLoginCheck = false;
         _pendingRefresh = false;
         _menuOpen = false;
@@ -140,7 +144,6 @@ export default GObject.registerClass(
         }
 
         async _refresh() {
-            if (this._isDestroyed) return;
             if (this._isRefreshing) {
                 // Re-run once the in-flight refresh ends so this request is not lost.
                 this._pendingRefresh = true;
@@ -155,7 +158,6 @@ export default GObject.registerClass(
 
                 const t = this._log.startTimer();
                 const status = await this._vpn.getStatus();
-                if (this._isDestroyed) return;
                 status.loggedin = this._isLoggedIn;
                 // Use the running flag returned by getStatus() (derived from exit code)
                 // instead of a second isNordVpnRunning() call to avoid duplicate CLI invocations.
@@ -185,13 +187,14 @@ export default GObject.registerClass(
                     nextDelay: this._nextDelaySec()
                 });
             } catch (e) {
+                if (isCancelled(e)) return;
                 const prev = this._refreshBackoffSec;
                 this._refreshBackoffSec = Math.min(this._refreshBackoffSec ? this._refreshBackoffSec * 2 : 5, 60);
                 this._log.warn('refresh failed, backoff increased', {prev, next: this._refreshBackoffSec, error: e?.message});
                 this._log.error('Unable to refresh', e);
             } finally {
                 this._isRefreshing = false;
-                if (!this._isDestroyed) {
+                if (!this._cancellable.is_cancelled()) {
                     // A refresh requested while this one was in flight (login check, state
                     // override) runs now so the UI reflects it without waiting for the timer.
                     if (this._pendingRefresh) {
@@ -276,7 +279,7 @@ export default GObject.registerClass(
         async _connect() {
             this._vpn.connectVpn().then(result => {
                 // null means throttled — no connection attempt was made, so don't show connecting state
-                if (result === null || this._isDestroyed) return;
+                if (result === null || this._cancellable.is_cancelled()) return;
                 this._overrideRefresh(Constants.status.connecting);
             }).catch(e => this._log.error('unable to connect to vpn', e));
         }
@@ -285,22 +288,22 @@ export default GObject.registerClass(
             // Run the disconnect command
             this._vpn.disconnectVpn().then(() => {
                 // Set an override on the status as the command line status takes a while to catch up
-                if (!this._isDestroyed) this._overrideRefresh(Constants.status.disconnecting);
+                if (!this._cancellable.is_cancelled()) this._overrideRefresh(Constants.status.disconnecting);
             }).catch(e => this._log.error('unable to disconnect', e));
         }
 
         async _login() {
-            if (!this._isDestroyed) this._overrideRefresh(Constants.status.login);
+            this._overrideRefresh(Constants.status.login);
             await this._vpn.loginVpn().catch(e => {
                 this._log.error('loginVpn failed', e);
                 // Clear the optimistic login override since no browser flow was launched
-                if (!this._isDestroyed) this._refresh();
+                if (!this._cancellable.is_cancelled()) this._refresh();
             });
         }
 
         async _logout() {
             await this._vpn.logoutVpn();
-            if (!this._isDestroyed) this._overrideRefresh(Constants.status.logout);
+            if (!this._cancellable.is_cancelled()) this._overrideRefresh(Constants.status.logout);
         }
 
         // Local uptime clock. nordvpn reports uptime in whole seconds at each poll, so between polls
@@ -330,7 +333,6 @@ export default GObject.registerClass(
 
         // Runs the 1s tick only while CONNECTED and the CONNECTED template shows a live uptime token.
         _updateUptimeClock() {
-            if (this._isDestroyed) return;
             if (this._lastStatus?.currentState?.stateName !== Constants.states.CONNECTED) {
                 this._stopUptimeClock(true);
                 return;
@@ -343,7 +345,7 @@ export default GObject.registerClass(
         _startUptimeClock() {
             if (this._uptimeTimer) return;
             this._uptimeTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
-                if (this._isDestroyed || !this._panelIcon || this._uptimeSyncSec === null) {
+                if (this._uptimeSyncSec === null) {
                     this._uptimeTimer = null; // the source is removed on return, don't remove it again
                     return GLib.SOURCE_REMOVE;
                 }
@@ -372,7 +374,7 @@ export default GObject.registerClass(
             this._extension.openPreferences();
         }
 
-        async _buildIndicatorMenu() {
+        _buildIndicatorMenu() {
             const t = this._log.startTimer();
             this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
             this.menu.addMenuItem(this._statusPopup);
@@ -448,7 +450,6 @@ export default GObject.registerClass(
                     this._pendingLoginCheck = true;
                     this._vpn.checkLogin().then(loggedIn => {
                         this._pendingLoginCheck = false;
-                        if (this._isDestroyed) return;
                         this._isLoggedIn = loggedIn;
                         this._refresh();
                     }).catch(e => {
@@ -461,7 +462,6 @@ export default GObject.registerClass(
             // Async initial login check — non-blocking.
             // Only trigger a follow-up refresh if the login state changed.
             this._vpn.checkLogin().then(loggedIn => {
-                if (this._isDestroyed) return;
                 const wasLoggedIn = this._isLoggedIn;
                 this._isLoggedIn = loggedIn;
                 if (this._isLoggedIn !== wasLoggedIn) {
@@ -472,14 +472,15 @@ export default GObject.registerClass(
         }
 
         _setTimeout(timeoutDuration) {
-            if (this._isDestroyed) return;
             // Never leave an earlier timer orphaned
-            this._clearTimeout();
+            if (this._timeout) {
+                GLib.Source.remove(this._timeout);
+                this._timeout = null;
+            }
             const delay = Math.max(1, timeoutDuration + this._refreshBackoffSec);
             // Refresh after an interval
             this._timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
                 this._timeout = null; // the source is removed on return, don't remove it again
-                if (this._isDestroyed) return GLib.SOURCE_REMOVE;
                 this._refresh().catch(e => this._log.error('unable to refresh', e));
                 return GLib.SOURCE_REMOVE; // Ensure the timeout is only run once
             });
@@ -499,23 +500,22 @@ export default GObject.registerClass(
             this._serverMenu = new ConnectionMenu(`Servers`, `servers`, Constants.favorites.favoriteServers, this._overrideRefresh.bind(this), this._extSettings);
             this._panelIcon = new PanelIcon(this._extSettings);
 
-            this._buildIndicatorMenu().then(async () => {
-                if (this._isDestroyed) return;
-                // Startup is read-only: build UI, fetch status, schedule refresh.
-                // applySettingsToNord() is intentionally omitted here to avoid
-                // blocking writes during login/unlock (see issue #102).
-                // Settings are applied only from the prefs Apply button.
-                this._log.debug('enable() startup: read-only path, skipping applySettingsToNord');
-                // Sync GSettings from NordVPN so the prefs UI reflects actual settings.
-                this._vpn.setSettingsFromNord().catch(e => this._log.error('setSettingsFromNord failed', e));
-                this._refresh().then(() => {
-                    this._log.endTimer(t, 'SPAN', {operation: 'enable'});
-                }).catch(e => this._log.error('unable to refresh', e));
-            }).catch(e => this._log.error('unable to build indicator menu', e));
+            this._buildIndicatorMenu();
+            // Startup is read-only: build UI, fetch status, schedule refresh.
+            // applySettingsToNord() is intentionally omitted here to avoid
+            // blocking writes during login/unlock (see issue #102).
+            // Settings are applied only from the prefs Apply button.
+            this._log.debug('enable() startup: read-only path, skipping applySettingsToNord');
+            // Sync GSettings from NordVPN so the prefs UI reflects actual settings.
+            this._vpn.setSettingsFromNord().catch(e => this._log.error('setSettingsFromNord failed', e));
+            this._refresh().then(() => {
+                this._log.endTimer(t, 'SPAN', {operation: 'enable'});
+            }).catch(e => this._log.error('unable to refresh', e));
         }
 
-        disable() {
-            this._isDestroyed = true;
+        destroy() {
+            this._cancellable.cancel();
+            this._vpn.destroy();
             this._clearTimeout();
             this._stopUptimeClock(true);
             if (this._menuOpenChangedId) {
@@ -526,13 +526,9 @@ export default GObject.registerClass(
             this._lastMenuBuild = null;
 
             this._commonFavorite.disable();
-            this._commonFavorite.isAdded = false;
             this._countryMenu.disable();
-            this._countryMenu.isAdded = false;
             this._cityMenu.disable();
-            this._cityMenu.isAdded = false;
             this._serverMenu.disable();
-            this._serverMenu.isAdded = false;
             this._signals.disconnectAll();
 
             if (this._settingsChangedId) {
@@ -548,6 +544,7 @@ export default GObject.registerClass(
             this._signals = null;
             this._panelIcon = null;
             this._stateManager = null;
+            super.destroy();
         }
 
         getPanelPosition() {

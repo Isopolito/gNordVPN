@@ -1,4 +1,5 @@
 import {jest} from '@jest/globals';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 globalThis.log = () => {};
@@ -178,20 +179,53 @@ describe('VpnIndicator._refresh', () => {
             await flush();
         });
 
-        it('does not schedule after the indicator is destroyed', async () => {
+        it('does not update, back off or schedule when destroyed while getStatus is in flight', async () => {
             const indicator = createIndicator();
-            indicator._isDestroyed = true;
-            await indicator._refresh();
-            expect(timers.added).toEqual([]);
-            expect(indicator._vpn.getStatus).not.toHaveBeenCalled();
-        });
-
-        it('does not update or schedule if destroyed while getStatus is in flight', async () => {
-            const indicator = createIndicator();
-            indicator._vpn.getStatus = jest.fn(async () => { indicator._isDestroyed = true; return makeStatus('N/A'); });
+            indicator._vpn.getStatus = jest.fn(async () => {
+                indicator._cancellable.cancel();
+                throw new GLib.Error(0, Gio.IOErrorEnum.CANCELLED, 'Operation was cancelled');
+            });
             await indicator._refresh();
             expect(indicator._panelIcon.update).not.toHaveBeenCalled();
+            expect(indicator._refreshBackoffSec).toBe(0);
+            expect(indicator._isRefreshing).toBe(false);
             expect(timers.added).toEqual([]);
+        });
+
+        it('does not run a queued follow-up refresh once destroyed', async () => {
+            const indicator = createIndicator();
+            let release;
+            indicator._vpn.getStatus = jest.fn(() => new Promise(res => { release = () => res(makeStatus(Constants.states.DISCONNECTED)); }));
+            const first = indicator._refresh();
+            await indicator._refresh();
+            indicator._cancellable.cancel();
+            release();
+            await first;
+            expect(indicator._vpn.getStatus).toHaveBeenCalledTimes(1);
+            expect(timers.added).toEqual([]);
+        });
+
+        it('does not touch the indicator when a connect finishes after destroy()', async () => {
+            const indicator = createIndicator();
+            let finish;
+            indicator._vpn.connectVpn = jest.fn(() => new Promise(res => { finish = () => res('connected'); }));
+            const override = jest.spyOn(indicator, '_overrideRefresh');
+            await indicator._connect();
+            indicator._cancellable.cancel();
+            finish();
+            await flush();
+            expect(override).not.toHaveBeenCalled();
+        });
+
+        it('shows connecting when a connect finishes normally', async () => {
+            const indicator = createIndicator();
+            let finish;
+            indicator._vpn.connectVpn = jest.fn(() => new Promise(res => { finish = () => res('connected'); }));
+            const override = jest.spyOn(indicator, '_overrideRefresh').mockImplementation(() => {});
+            await indicator._connect();
+            finish();
+            await flush();
+            expect(override).toHaveBeenCalledWith(Constants.status.connecting);
         });
     });
 
@@ -397,3 +431,37 @@ describe('VpnIndicator._refresh', () => {
 async function flush() {
     for (let i = 0; i < 5; i++) await Promise.resolve();
 }
+
+describe('VpnIndicator.destroy', () => {
+    function destroyable() {
+        const indicator = createIndicator();
+        const order = [];
+        indicator._vpn.destroy = jest.fn(() => order.push(indicator._cancellable.is_cancelled() ? 'vpn-after-cancel' : 'vpn-before-cancel'));
+        ['_countryMenu', '_cityMenu', '_serverMenu'].forEach(k => { indicator[k].disable = jest.fn(); });
+        indicator._commonFavorite = {disable: jest.fn()};
+        indicator._signals = {disconnectAll: jest.fn(() => order.push('signals'))};
+        return {indicator, order};
+    }
+
+    it('cancels first, then destroys its Vpn, disconnects signals and releases references', () => {
+        const {indicator, order} = destroyable();
+        const vpn = indicator._vpn;
+        const menus = [indicator._countryMenu, indicator._cityMenu, indicator._serverMenu];
+        indicator.destroy();
+        expect(order).toEqual(['vpn-after-cancel', 'signals']);
+        expect(vpn.destroy).toHaveBeenCalledTimes(1);
+        menus.forEach(m => expect(m.disable).toHaveBeenCalledTimes(1));
+        expect(indicator._vpn).toBeNull();
+        expect(indicator._signals).toBeNull();
+        expect(indicator._panelIcon).toBeNull();
+        expect(indicator._stateManager).toBeNull();
+    });
+
+    it('removes the pending refresh timer', async () => {
+        const {indicator} = destroyable();
+        await indicator._refresh();
+        const id = indicator._timeout;
+        indicator.destroy();
+        expect(timers.removed).toContain(id);
+    });
+});
