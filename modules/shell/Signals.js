@@ -9,6 +9,13 @@ export default class Signals {
         this._ids[id] = callback;
     }
 
+    // Connects `signal` on `widget` and registers the matching disconnect. Returns the handler id.
+    connect(widget, signal, callback) {
+        const id = widget.connect(signal, callback);
+        this.register(id, () => widget.disconnect(id));
+        return id;
+    }
+
     disconnect(ids) {
         for (const id of Array.isArray(ids) ? ids : [ids]) {
             const callback = this._ids[id];

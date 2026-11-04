@@ -48,4 +48,15 @@ describe('Signals', () => {
         s.disconnectAll();
         expect(b).toHaveBeenCalledTimes(1);
     });
+
+    it('connect() connects the signal and disconnects it with the other callbacks', () => {
+        const widget = {connect: jest.fn(() => 42), disconnect: jest.fn()};
+        const handler = () => {};
+        const s = new Signals();
+        expect(s.connect(widget, 'activate', handler)).toBe(42);
+        expect(widget.connect).toHaveBeenCalledWith('activate', handler);
+        expect(widget.disconnect).not.toHaveBeenCalled();
+        s.disconnectAll();
+        expect(widget.disconnect).toHaveBeenCalledWith(42);
+    });
 });

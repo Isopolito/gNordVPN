@@ -62,7 +62,7 @@ export default class CommonFavorite extends MenuBase {
 
     _buildFavoriteMenuItem(favorite) {
         const menuItem = new PopupMenu.PopupMenuItem(favorite);
-        const menuItemClickId = this._connectTracked(menuItem, `activate`, () => {
+        const menuItemClickId = this._signals.connect(menuItem, `activate`, () => {
             const item = this.favList[favorite]?.item;
             const rawType = this.favList[favorite]?.type;
             if (!item || !rawType || this._vpn.isConnectThrottled()) return;

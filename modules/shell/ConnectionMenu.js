@@ -68,7 +68,7 @@ export default class ConnectionMenu extends MenuBase {
 
     _buildConnectionMenuItem(connection, isFavorite) {
         const menuItem = new PopupMenu.PopupMenuItem(connection);
-        const menuItemClickId = this._connectTracked(menuItem, `activate`, () => {
+        const menuItemClickId = this._signals.connect(menuItem, `activate`, () => {
             const target = this._connections[connection];
             const connType = this._connectionType;
             if (!target || this._vpn.isConnectThrottled()) return;

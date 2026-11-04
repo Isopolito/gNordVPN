@@ -44,19 +44,12 @@ export default class MenuBase {
         this._pendingIdleIds = [];
     }
 
-    // Connects `signal` on `widget` and registers the matching disconnect for teardown. Returns the handler id.
-    _connectTracked(widget, signal, callback) {
-        const id = widget.connect(signal, callback);
-        this._signals.register(id, () => widget.disconnect(id));
-        return id;
-    }
-
     // Adds the favorite star to a row and records the row's widgets under `key` for later destruction.
     _addFavoriteButton(key, menuItem, isFavorite, menuItemClickId, onPress) {
         const icofavBtn = this.buildFavIcon(isFavorite);
         menuItem.add_child(icofavBtn);
         menuItem.icofavBtn = icofavBtn;
         this._destroyMap[key] = {menuItemClickId, menuItem, icofavBtn};
-        menuItem.favoritePressId = this._connectTracked(icofavBtn, `button-press-event`, onPress);
+        menuItem.favoritePressId = this._signals.connect(icofavBtn, `button-press-event`, onPress);
     }
 }

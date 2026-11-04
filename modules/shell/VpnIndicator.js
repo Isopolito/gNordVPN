@@ -30,7 +30,6 @@ export default GObject.registerClass(
         _pendingLoginCheck = false;
         _pendingRefresh = false;
         _menuOpen = false;
-        _menuOpenChangedId = null;
         _transitionalSince = null;
         _lastStatus = null;
         _uptimeSyncSec = null;
@@ -366,7 +365,7 @@ export default GObject.registerClass(
             const t = this._log.startTimer();
             this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
             this.menu.addMenuItem(this._statusPopup);
-            this._menuOpenChangedId = this.menu.connect(`open-state-changed`, (menu, open) => this._setQuickRefresh(open));
+            this._signals.connect(this.menu, `open-state-changed`, (menu, open) => this._setQuickRefresh(open));
 
             this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
             this.menu.box.add_child(this._statusLabel);
@@ -377,13 +376,11 @@ export default GObject.registerClass(
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
             this._connectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.connect);
-            const connectMenuItemClickId = this._connectMenuItem.connect(`activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
-            this._signals.register(connectMenuItemClickId, () => this._connectMenuItem.disconnect(connectMenuItemClickId));
+            this._signals.connect(this._connectMenuItem, `activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
             this.menu.addMenuItem(this._connectMenuItem);
 
             this._disconnectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.disconnect);
-            const disconnectMenuItemClickId = this._disconnectMenuItem.connect(`activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
-            this._signals.register(disconnectMenuItemClickId, () => this._disconnectMenuItem.disconnect(disconnectMenuItemClickId));
+            this._signals.connect(this._disconnectMenuItem, `activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
             this.menu.addMenuItem(this._disconnectMenuItem);
 
             this._commonFavorite.build();
@@ -406,22 +403,20 @@ export default GObject.registerClass(
 
             const settingsMenuItem = new PopupMenu.PopupMenuItem(`Settings`);
             this.menu.addMenuItem(settingsMenuItem);
-            settingsMenuItem.connect(`activate`, this._openSettings.bind(this));
+            this._signals.connect(settingsMenuItem, `activate`, this._openSettings.bind(this));
 
             this._loginMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.login);
-            const loginMenuItemClickId = this._loginMenuItem.connect(`activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
-            this._signals.register(loginMenuItemClickId, () => this._loginMenuItem.disconnect(loginMenuItemClickId));
+            this._signals.connect(this._loginMenuItem, `activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
             this.menu.addMenuItem(this._loginMenuItem);
 
             this._logoutMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.logout);
-            const logoutMenuItemClickId = this._logoutMenuItem.connect(`activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
-            this._signals.register(logoutMenuItemClickId, () => this._logoutMenuItem.disconnect(logoutMenuItemClickId));
+            this._signals.connect(this._logoutMenuItem, `activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
             this.menu.addMenuItem(this._logoutMenuItem);
 
             this._panelIcon.build();
             this.add_child(this._panelIcon.button());
 
-            this._panelIcon.button().connect(`button-press-event`, (actor, event) => {
+            this._signals.connect(this._panelIcon.button(), `button-press-event`, () => {
                 // Login is only checked on click, never on a timer: `nordvpn account` asks a server that rate limits
                 // requests, and `nordvpn login` creates a new login URL each time. _pendingLoginCheck allows one
                 // check at a time, so rapid clicks do not stack them.
@@ -495,10 +490,6 @@ export default GObject.registerClass(
             this._vpn.destroy();
             this._clearTimeout();
             this._stopUptimeClock(true);
-            if (this._menuOpenChangedId) {
-                this.menu.disconnect(this._menuOpenChangedId);
-                this._menuOpenChangedId = null;
-            }
             // Reset so the next enable() gets an immediate throttledMenuBuild on first refresh
             this._lastMenuBuild = null;
 
