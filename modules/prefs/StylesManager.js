@@ -60,7 +60,7 @@ export default class StylesManager {
         this._previewLabel = null;
         this._provider = null;
         this._providerDisplay = null;
-        this._activeProfile = null; // profile being edited; set by Load
+        this._activeProfile = null; // profile being edited; set by its Edit button
         this._savedCustom = null;  // last custom padding/margin, restored when Spacing returns to Custom
     }
 

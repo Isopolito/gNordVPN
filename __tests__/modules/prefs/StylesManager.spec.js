@@ -636,5 +636,108 @@ describe('StylesManager', () => {
             expect(manager._model).toEqual(normalize(liveModel));
             expect(parseStored(settings.get_string('panel-appearance'))).toEqual(normalize(liveModel));
         });
+
+        describe('editing a profile', () => {
+            function withProfiles(...names) {
+                const opened = openPage(live());
+                names.forEach(name => {
+                    typeName(opened.byTitle, name);
+                    click(saveButton(opened.byTitle));
+                });
+                opened.settings.writes.length = 0;
+                const row = (name) => profileRows().find(r => r.title === name);
+                const stored = (name) => JSON.parse(opened.settings.get_string('panel-profiles'))[name];
+                const changeLook = () => { opened.byTitle(Adw.ComboRow, 'Spacing').selected = 1; };
+                return {...opened, row, stored, changeLook};
+            }
+
+            const expectIdle = (row) => {
+                expect(buttonOf(row, 'Edit').visible).toBe(true);
+                expect(buttonOf(row, 'Save').visible).toBe(false);
+                expect(buttonOf(row, 'Discard').visible).toBe(false);
+                expect(row.subtitle).toBe('');
+            };
+
+            const expectEditing = (row, {changed}) => {
+                expect(buttonOf(row, 'Edit').visible).toBe(false);
+                expect(buttonOf(row, 'Save').visible).toBe(true);
+                expect(buttonOf(row, 'Discard').visible).toBe(true);
+                expect(buttonOf(row, 'Save').sensitive).toBe(changed);
+                expect(buttonOf(row, 'Discard').sensitive).toBe(changed);
+                expect(row.subtitle).toBe(changed ? 'Editing: unsaved changes' : 'Editing');
+            };
+
+            it('offers only Edit until a profile is selected', () => {
+                const {row} = withProfiles('Mine');
+                expectIdle(row('Mine'));
+            });
+
+            it('Edit selects the profile, with nothing to save yet', () => {
+                const {row} = withProfiles('Mine');
+                click(buttonOf(row('Mine'), 'Edit'));
+                expectEditing(row('Mine'), {changed: false});
+            });
+
+            it('shows unsaved changes once the look differs, without touching the stored profile', () => {
+                const {row, stored, changeLook} = withProfiles('Mine');
+                click(buttonOf(row('Mine'), 'Edit'));
+                const before = stored('Mine');
+                changeLook();
+                expectEditing(row('Mine'), {changed: true});
+                expect(stored('Mine')).toEqual(before);
+            });
+
+            it('Save writes the current look into the profile and stays selected', () => {
+                const {row, stored, changeLook, manager} = withProfiles('Mine');
+                click(buttonOf(row('Mine'), 'Edit'));
+                const before = stored('Mine');
+                changeLook();
+                const edited = JSON.parse(JSON.stringify(manager._model));
+                expect(normalize(edited)).not.toEqual(normalize(before));
+                click(buttonOf(row('Mine'), 'Save'));
+                expect(stored('Mine')).toEqual(normalize(edited));
+                expect(manager._model).toEqual(edited);
+                expectEditing(row('Mine'), {changed: false});
+            });
+
+            it('Discard restores the stored look and leaves the profile alone', () => {
+                const {row, stored, changeLook, manager} = withProfiles('Mine');
+                click(buttonOf(row('Mine'), 'Edit'));
+                const before = stored('Mine');
+                changeLook();
+                expect(manager._model).not.toEqual(normalize(before));
+                click(buttonOf(row('Mine'), 'Discard'));
+                expect(manager._model).toEqual(normalize(before));
+                expect(stored('Mine')).toEqual(before);
+                expectEditing(row('Mine'), {changed: false});
+            });
+
+            it('editing another profile moves the selection', () => {
+                const {row} = withProfiles('One', 'Two');
+                click(buttonOf(row('One'), 'Edit'));
+                click(buttonOf(row('Two'), 'Edit'));
+                expectIdle(row('One'));
+                expectEditing(row('Two'), {changed: false});
+            });
+
+            it('deleting the selected profile clears the selection', () => {
+                const {row, manager} = withProfiles('One', 'Two');
+                click(buttonOf(row('One'), 'Edit'));
+                click(buttonOf(row('One'), 'Delete'));
+                expect(manager._activeProfile).toBeNull();
+                expect(profileRows().map(r => r.title)).toEqual(['Two']);
+                expectIdle(row('Two'));
+            });
+
+            it('deleting another profile keeps the selection', () => {
+                const {row, manager, stored} = withProfiles('One', 'Two');
+                click(buttonOf(row('One'), 'Edit'));
+                click(buttonOf(row('Two'), 'Delete'));
+                expect(profileRows().map(r => r.title)).toEqual(['One']);
+                expect(stored('Two')).toBeUndefined();
+                expect(manager._activeProfile).toBe('One');
+                expectEditing(row('One'), {changed: false});
+            });
+        });
     });
 });
