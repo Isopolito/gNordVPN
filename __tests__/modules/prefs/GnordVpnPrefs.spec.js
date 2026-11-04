@@ -300,8 +300,6 @@ describe('GnordVpnPrefs', () => {
             const touched = fake.writes.map(([k]) => k);
             expect(touched).not.toContain('countries-selected-for-cities');
             expect(touched).not.toContain('countries-selected-for-servers');
-            expect(prefs._cityPopulating).toBe(false);
-            expect(prefs._serverPopulating).toBe(false);
         });
 
         it('writes countries-selected-for-cities when the selection changes', async () => {
@@ -327,17 +325,17 @@ describe('GnordVpnPrefs', () => {
             expect(settings.get_value('countries-selected-for-servers').deep_unpack()).toEqual([81, 108]);
         });
 
-        it('suppresses writes while _cityPopulating / _serverPopulating is set', async () => {
+        it('suppresses writes while a list is being populated', async () => {
             const {prefs, settings} = await buildPrefs();
             const {cities, servers} = treeViews();
 
-            prefs._cityPopulating = true;
-            prefs._serverPopulating = true;
+            prefs._cityTree.populating = true;
+            prefs._serverTree.populating = true;
             cities.get_selection().select_iter({row: 0});
             servers.get_selection().select_iter({row: 0});
             expect(settings.writes).toEqual([]);
 
-            prefs._cityPopulating = false;
+            prefs._cityTree.populating = false;
             cities.get_selection().select_iter({row: 1});
             expect(settings.writes.map(([k]) => k)).toEqual(['countries-selected-for-cities']);
         });

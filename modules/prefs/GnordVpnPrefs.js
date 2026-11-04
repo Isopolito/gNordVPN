@@ -348,8 +348,8 @@ export default class GnordVpnPrefs {
     }
 
     // A "max per country" spinner and a multi-select list of country names. The selection is written to
-    // `settingKey` as a GVariant of `variantType`, holding `valueOf(countryName)` for each selected row.
-    _createCountryTree({maxLabel, maxSettingKey, selectLabel, settingKey, variantType, populatingKey, valueOf, rowHeight}) {
+    // `settingKey` as a GVariant of `variantType`, holding `selectionValue(countryName)` for each selected row.
+    _createCountryTree({maxLabel, maxSettingKey, selectLabel, settingKey, variantType, selectionValue, rowHeight}) {
         const grid = new Gtk.Grid({
             margin_start: 18, margin_top: 10, column_spacing: 12, row_spacing: 12, visible: true
         });
@@ -390,18 +390,17 @@ export default class GnordVpnPrefs {
         treeView.insert_column(column, 0);
         treeView.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE);
 
-        const iterMap = {};
-        this[populatingKey] = false;
+        const tree = {grid, treeView, iterMap: {}, store, settingKey, selectionValue, populating: false};
 
         treeView.get_selection().connect('changed', () => {
-            if (this[populatingKey]) return;
+            if (tree.populating) return;
             const [pathList] = treeView.get_selection().get_selected_rows();
 
             const selected = [];
             pathList.forEach(path => {
                 const model = treeView.get_model();
                 const [, iter] = model.get_iter(path);
-                selected.push(valueOf(model.get_value(iter, 0)));
+                selected.push(selectionValue(model.get_value(iter, 0)));
             });
 
             this._settings.set_value(settingKey, new GLib.Variant(variantType, selected));
@@ -413,22 +412,22 @@ export default class GnordVpnPrefs {
         scroll.set_min_content_height(400);
         grid.attach(scroll, 1, 1, 1, 1);
 
-        return {grid, treeView, iterMap, store, settingKey, populatingKey, valueOf};
+        return tree;
     }
 
     // Fills the tree with the country names and selects the rows saved in its setting, without writing the setting back.
-    _populateCountryTree({store, treeView, iterMap, settingKey, populatingKey, valueOf}) {
-        const saved = this._settings.get_value(settingKey).deep_unpack();
-        store.clear();
-        this[populatingKey] = true;
+    _populateCountryTree(tree) {
+        const saved = this._settings.get_value(tree.settingKey).deep_unpack();
+        tree.store.clear();
+        tree.populating = true;
         this._countryNames.forEach(country => {
-            const iter = store.append(null);
-            store.set(iter, [0], [country]);
-            iterMap[country] = iter;
-            if (saved.includes(valueOf(country)))
-                treeView.get_selection().select_iter(iter);
+            const iter = tree.store.append(null);
+            tree.store.set(iter, [0], [country]);
+            tree.iterMap[country] = iter;
+            if (saved.includes(tree.selectionValue(country)))
+                tree.treeView.get_selection().select_iter(iter);
         });
-        this[populatingKey] = false;
+        tree.populating = false;
     }
 
     _setWindowSize(window) {
@@ -507,38 +506,36 @@ export default class GnordVpnPrefs {
         this._countryMapWithID = {};
         this._countryNames = [];
 
-        const cityTree = this._createCountryTree({
+        this._cityTree = this._createCountryTree({
             maxLabel: `Max cities per country displayed:`,
             maxSettingKey: `number-cities-per-countries`,
             selectLabel: `Select countries for cities tab:\n<small>Hold down CTRL to select multiple</small>`,
             settingKey: 'countries-selected-for-cities',
             variantType: 'as',
-            populatingKey: '_cityPopulating',
-            valueOf: (country) => this._countryMap[country],
+            selectionValue: (country) => this._countryMap[country],
             rowHeight: 30,
         });
         const cityPage = new Adw.PreferencesPage();
         cityPage.set_title("Cities");
         cityPage.set_icon_name("document-open-symbolic");
         const cityGroup = new Adw.PreferencesGroup();
-        cityGroup.add(cityTree.grid);
+        cityGroup.add(this._cityTree.grid);
         cityPage.add(cityGroup);
         window.add(cityPage);
 
-        const serverTree = this._createCountryTree({
+        this._serverTree = this._createCountryTree({
             maxLabel: `Max servers per country displayed:`,
             maxSettingKey: `number-servers-per-countries`,
             selectLabel: `Select countries to list in servers tab:\n<small>Hold down CTRL to select multiple</small>`,
             settingKey: 'countries-selected-for-servers',
             variantType: 'ai',
-            populatingKey: '_serverPopulating',
-            valueOf: (country) => this._countryMapWithID[country],
+            selectionValue: (country) => this._countryMapWithID[country],
         });
         const serverPage = new Adw.PreferencesPage();
         serverPage.set_title("Servers");
         serverPage.set_icon_name("network-workgroup-symbolic");
         const serverGroup = new Adw.PreferencesGroup();
-        serverGroup.add(serverTree.grid);
+        serverGroup.add(this._serverTree.grid);
         serverPage.add(serverGroup);
         window.add(serverPage);
 
@@ -559,13 +556,13 @@ export default class GnordVpnPrefs {
             this._countryMapWithID = countryMapWithID || {};
             this._countryNames = Common.safeObjectKeys(this._countryMap);
 
-            this._populateCountryTree(cityTree);
-            this._populateCountryTree(serverTree);
+            this._populateCountryTree(this._cityTree);
+            this._populateCountryTree(this._serverTree);
         }).catch(e => this._log.error('prefs country population failed', e));
 
         const resetManager = new ResetManager();
         resetAll.connect('clicked', () => {
-            resetManager.resetAllSettings(this._settings, this._protoCbox, this._techCbox, cityTree.treeView, cityTree.iterMap, serverTree.treeView, serverTree.iterMap);
+            resetManager.resetAllSettings(this._settings, this._protoCbox, this._techCbox, this._cityTree.treeView, this._cityTree.iterMap, this._serverTree.treeView, this._serverTree.iterMap);
         });
 
         resetConnection.connect('clicked', () => {
