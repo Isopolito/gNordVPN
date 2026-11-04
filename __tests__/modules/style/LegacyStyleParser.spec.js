@@ -6,6 +6,21 @@ import {legacyGenerate} from '../../helpers/legacyStyles.js';
 const uniformStyles = (css, text = 't') => Object.fromEntries(STATE_KEYS.map(key => [key, {panelText: text, css}]));
 
 describe('LegacyStyleParser.parse', () => {
+    it('uses zero padding and margin when the legacy CSS has none, so editing does not resize the panel', () => {
+        const model = parse(uniformStyles(''), 'font-weight: bold;');
+        const zero = {top: '0', right: '0', bottom: '0', left: '0'};
+        expect(model.shape.padding).toEqual(zero);
+        expect(model.shape.margin).toEqual(zero);
+        expect(model.shape.spacing).toBe('custom');
+        expect(compile(model).commonCss).toContain('padding: 0; margin: 0;');
+    });
+
+    it('keeps the side the legacy CSS sets and zeroes only the missing one', () => {
+        const model = parse(uniformStyles(''), 'padding: 3px 10px 0;');
+        expect(model.shape.padding).toEqual({top: '3px', right: '10px', bottom: '0', left: '10px'});
+        expect(model.shape.margin).toEqual({top: '0', right: '0', bottom: '0', left: '0'});
+    });
+
     it('recognises the common shape declarations', () => {
         const model = parse(uniformStyles(''), 'font-weight: bold; border-radius: 5px; padding: 3px 10px 0; margin: 3px 0px 3px 0px; border: 1px solid white;');
         expect(model.shape.corner).toBe('rounded');

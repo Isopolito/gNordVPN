@@ -61,6 +61,8 @@ const startsWithAll = (list, prefix) => prefix.length > 0 && prefix.every((piece
 
 const asCss = (pieces) => pieces.map(piece => `${piece};`).join(' ');
 
+const NO_SIDES = {top: '0', right: '0', bottom: '0', left: '0'};
+
 // Builds an appearance model from the legacy `panel-styles` ({KEY: {panelText, css}}) and
 // `common-panel-style` values. Nothing is lost: unrecognised declarations go into `advanced` verbatim.
 export function parse(panelStyles, commonCss) {
@@ -104,8 +106,9 @@ export function parse(panelStyles, commonCss) {
     });
     const {groups, overrides} = buildGroups(stateValues, base.groups);
 
-    const padding = common.shape.padding ?? base.shape.padding;
-    const margin = common.shape.margin ?? base.shape.margin;
+    // Legacy CSS without padding or margin has none, so the first edit must not add the defaults and resize the panel.
+    const padding = common.shape.padding ?? NO_SIDES;
+    const margin = common.shape.margin ?? NO_SIDES;
 
     return {
         version: MODEL_VERSION,
@@ -114,8 +117,8 @@ export function parse(panelStyles, commonCss) {
             bold: common.shape.bold === true,
             border: common.shape.border ?? {enabled: false, color: base.shape.border.color},
             spacing: detectSpacing(padding, margin),
-            padding,
-            margin,
+            padding: {...padding},
+            margin: {...margin},
         },
         groups,
         overrides,
