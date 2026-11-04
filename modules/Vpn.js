@@ -85,6 +85,26 @@ export default class Vpn {
         return buf;
     }
 
+    // A successful (exit 0) `nordvpn status` means nordvpnd is running.
+    async _isDaemonRunning() {
+        try {
+            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
+            return true;
+        } catch (e) {
+            this._log.debug('nordvpnd not running', {error: String(e)});
+            return false;
+        }
+    }
+
+    // Runs a command whose failure must not stop the caller: some settings are rejected when conditionally invalid.
+    async _execBestEffort(cmd) {
+        try {
+            await this._procCom.execCommunicateAsync(cmd);
+        } catch (e) {
+            this._log.debug('best-effort command failed', {cmd, error: String(e)});
+        }
+    }
+
     async _execAsyncIfRunning(command, running) {
         if (!running) return ``;
         return this._procCom.execCommunicateAsync(command);
@@ -92,11 +112,7 @@ export default class Vpn {
 
     async setSettingsFromNord() {
         // Use async status check to determine if nordvpnd is running — avoids blocking sync call.
-        let running = false;
-        try {
-            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
-            running = true;
-        } catch (e) { this._log.debug('setSettingsFromNord: nordvpnd not running', {error: String(e)}); }
+        const running = await this._isDaemonRunning();
         const standardOut = await this._execAsyncIfRunning(CMD_FETCH_SETTINGS, running);
         if (!standardOut) return;
         for (const line of standardOut.split(`\n`)) {
@@ -127,32 +143,25 @@ export default class Vpn {
         const protocol = this._settings.get_string(`protocol`);
         const technology = this._settings.get_string(`technology`);
 
-        let running = false;
-        try { await this._procCom.execCommunicateAsync(CMD_VPNSTATUS); running = true; } catch {}
-        if (!running) return;
+        if (!await this._isDaemonRunning()) return;
 
         // Apply each setting independently — some may be rejected when conditionally
         // invalid (e.g., obfuscate is unsupported with NordLynx). Best-effort matches
         // the original sync behavior where non-zero exits were silently ignored.
-        const applySetting = async (cmd) => {
-            try { await this._procCom.execCommunicateAsync(cmd); }
-            catch (e) { this._log.debug('applySettingsToNord: setting rejected', {cmd, error: String(e)}); }
-        };
-
         const t = this._log.startTimer();
-        await applySetting(`${CMD_SETTINGS} firewall ${firewall}`);
-        await applySetting(`${CMD_SETTINGS} analytics ${analytics}`);
-        await applySetting(`${CMD_SETTINGS} autoconnect ${autoconnect}`);
-        await applySetting(`${CMD_SETTINGS} cybersec ${cybersec}`);
-        await applySetting(`${CMD_SETTINGS} killswitch ${killswitch}`);
-        await applySetting(`${CMD_SETTINGS} obfuscate ${obfuscate}`);
-        await applySetting(`${CMD_SETTINGS} ipv6 ${ipv6}`);
-        await applySetting(`${CMD_SETTINGS} notify ${notify}`);
-        await applySetting(`${CMD_SETTINGS} protocol ${protocol}`);
-        await applySetting(`${CMD_SETTINGS} technology ${technology}`);
+        await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
+        await this._execBestEffort(`${CMD_SETTINGS} analytics ${analytics}`);
+        await this._execBestEffort(`${CMD_SETTINGS} autoconnect ${autoconnect}`);
+        await this._execBestEffort(`${CMD_SETTINGS} cybersec ${cybersec}`);
+        await this._execBestEffort(`${CMD_SETTINGS} killswitch ${killswitch}`);
+        await this._execBestEffort(`${CMD_SETTINGS} obfuscate ${obfuscate}`);
+        await this._execBestEffort(`${CMD_SETTINGS} ipv6 ${ipv6}`);
+        await this._execBestEffort(`${CMD_SETTINGS} notify ${notify}`);
+        await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
+        await this._execBestEffort(`${CMD_SETTINGS} technology ${technology}`);
 
         // TODO: Why is this 2nd call to firewall needed to make things work?
-        await applySetting(`${CMD_SETTINGS} firewall ${firewall}`);
+        await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
         this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 11});
     }
 
@@ -272,8 +281,8 @@ export default class Vpn {
         if (query) {
             // Best-effort: autoconnect updates may fail for some query types but
             // nordvpn c <query> can still succeed, so don't abort on these errors.
-            try { await this._procCom.execCommunicateAsync(CMD_AUTOCONNECT_OFF); } catch (e) { this._log.debug('autoconnect off failed', {error: String(e)}); }
-            try { await this._procCom.execCommunicateAsync(`${CMD_AUTOCONNECT_ON} ${query}`); } catch (e) { this._log.debug('autoconnect on failed', {error: String(e)}); }
+            await this._execBestEffort(CMD_AUTOCONNECT_OFF);
+            await this._execBestEffort(`${CMD_AUTOCONNECT_ON} ${query}`);
             return this._procCom.execCommunicateAsync(`${CMD_CONNECT} ${query}`);
         } else {
             return this._procCom.execCommunicateAsync(CMD_CONNECT);

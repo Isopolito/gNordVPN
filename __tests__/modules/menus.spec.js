@@ -140,6 +140,28 @@ describe('Favorites', () => {
         expect(JSON.parse(settings.values[KEY])).toEqual({B: 'b'});
     });
 
+    it('leaves corrupt stored data untouched when removing a favorite', () => {
+        const settings = createFakeSettings({[KEY]: 'not json'});
+        new Favorites(settings).remove(KEY, 'A');
+        expect(settings.values[KEY]).toBe('not json');
+    });
+
+    it('replaces corrupt stored data when adding a favorite', () => {
+        const settings = createFakeSettings({[KEY]: 'not json'});
+        new Favorites(settings).add(KEY, 'A', 'a');
+        expect(JSON.parse(settings.values[KEY])).toEqual({A: 'a'});
+    });
+
+    it.each(['42', '"text"', 'null', '[1]'])('treats stored non-object JSON %s like invalid JSON', (stored) => {
+        const settings = createFakeSettings({[KEY]: stored});
+        const fav = new Favorites(settings);
+        expect(fav.get(KEY).favorites).toEqual({});
+        fav.remove(KEY, 'A');
+        expect(settings.values[KEY]).toBe(stored);
+        fav.add(KEY, 'A', 'a');
+        expect(JSON.parse(settings.values[KEY])).toEqual({A: 'a'});
+    });
+
     it('ignores remove() without an item', () => {
         const before = JSON.stringify({A: 'a'});
         const settings = createFakeSettings({[KEY]: before});

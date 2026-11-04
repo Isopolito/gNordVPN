@@ -9,15 +9,22 @@ export default class Favorites {
     _getData(a) { return this._settings.get_string(a); }
     _setData(a, b) { return this._settings.set_string(a, b); }
     
-    get(favoriteType, items=[]) {
-        let favorites = {};
+    // The stored favorites object, or undefined when the stored text is not valid JSON or not an object.
+    _read(favoriteType) {
+        const data = this._getData(favoriteType) || '{}';
+        let favorites;
         try {
-            let data = this._getData(favoriteType);
-            if (!data) data = '{}';
             favorites = JSON.parse(data);
-        } catch(e) {}
+        } catch (e) {
+            return undefined;
+        }
+        return favorites !== null && typeof favorites === 'object' && !Array.isArray(favorites) ? favorites : undefined;
+    }
 
-        for (const key of Object.keys(favorites)) 
+    get(favoriteType, items=[]) {
+        const favorites = this._read(favoriteType) ?? {};
+
+        for (const key of Object.keys(favorites))
             if (key in items) delete items[key];
 
         return {
@@ -25,39 +32,25 @@ export default class Favorites {
             itemsMinusFavorites: items,
         }
     }
-    
+
     remove(favoriteType, item) {
         if (!item) return;
 
-        try {
-            let data = this._getData(favoriteType);
-            if (!data) data = '{}';
-
-            let favorites = JSON.parse(data);
-            delete favorites[item];
-
-            this._setData(favoriteType, JSON.stringify(favorites));
-
-        } catch(e) {
-            this._log.error('failed removing favorite', e);
+        const favorites = this._read(favoriteType);
+        if (!favorites) {
+            this._log.error('failed removing favorite');
+            return;
         }
+
+        delete favorites[item];
+        this._setData(favoriteType, JSON.stringify(favorites));
     }
 
     add(favoriteType, item, item2) {
         if (!item || !item2) return;
 
-        let favorites = {};
-        try {
-            let data = this._getData(favoriteType);
-            if (!data) data = '{}';
-            favorites = JSON.parse(data);
-        } catch(e) {}
-
-        try {
-            favorites[item] = item2;
-            this._setData(favoriteType, JSON.stringify(favorites));
-        } catch(e) { 
-            this._log.error('failed adding favorite', e);
-        }
+        const favorites = this._read(favoriteType) ?? {};
+        favorites[item] = item2;
+        this._setData(favoriteType, JSON.stringify(favorites));
     }
 }
