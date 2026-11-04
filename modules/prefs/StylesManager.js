@@ -261,11 +261,8 @@ export default class StylesManager {
     // Pushes the model into every widget without triggering writes.
     _syncUi() {
         this._syncing++;
-        try {
-            this._sync.forEach(fn => fn(this._model));
-        } finally {
-            this._syncing--;
-        }
+        this._sync.forEach(fn => fn(this._model));
+        this._syncing--;
     }
 
     // ---- small widget builders --------------------------------------------------------------

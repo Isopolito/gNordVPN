@@ -434,7 +434,7 @@ export default class GnordVpnPrefs {
             button.set_sensitive(false);
             this._vpn.applySettingsToNord()
                 .catch(e => this._log.error('applySettingsToNord failed', e))
-                .finally(() => { try { button.set_sensitive(true); } catch {} });
+                .finally(() => button.set_sensitive(true));
         });
 
         box.append(button);  // Use append() in GTK 4
@@ -708,32 +708,26 @@ export default class GnordVpnPrefs {
             const cityCountries = this._settings.get_value('countries-selected-for-cities').deep_unpack();
             cityStore.clear();
             this._cityPopulating = true;
-            try {
-                this._countryNames.forEach(country => {
-                    let iter = cityStore.append(null);
-                    cityStore.set(iter, [0], [country]);
-                    cityTreeIterMap[country] = iter;
-                    if (cityCountries.includes(this._countryMap[country]))
-                        cityTreeView.get_selection().select_iter(iter);
-                });
-            } finally {
-                this._cityPopulating = false;
-            }
+            this._countryNames.forEach(country => {
+                let iter = cityStore.append(null);
+                cityStore.set(iter, [0], [country]);
+                cityTreeIterMap[country] = iter;
+                if (cityCountries.includes(this._countryMap[country]))
+                    cityTreeView.get_selection().select_iter(iter);
+            });
+            this._cityPopulating = false;
 
             const serverCountries = this._settings.get_value('countries-selected-for-servers').deep_unpack();
             serverStore.clear();
             this._serverPopulating = true;
-            try {
-                this._countryNames.forEach(country => {
-                    let iter = serverStore.append(null);
-                    serverStore.set(iter, [0], [country]);
-                    serverTreeIterMap[country] = iter;
-                    if (serverCountries.includes(this._countryMapWithID[country]))
-                        serverTreeView.get_selection().select_iter(iter);
-                });
-            } finally {
-                this._serverPopulating = false;
-            }
+            this._countryNames.forEach(country => {
+                let iter = serverStore.append(null);
+                serverStore.set(iter, [0], [country]);
+                serverTreeIterMap[country] = iter;
+                if (serverCountries.includes(this._countryMapWithID[country]))
+                    serverTreeView.get_selection().select_iter(iter);
+            });
+            this._serverPopulating = false;
         });
 
         const resetManager = new ResetManager();
