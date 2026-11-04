@@ -44,7 +44,7 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const SAFE_VALUE = /^[^;{}\n\r]*$/;
 const cleanValue = (value, fallback) => (typeof value === 'string' && SAFE_VALUE.test(value)) ? value.trim() : fallback;
 
-// Looks like today's schema defaults: Large text with the Traffic light theme.
+// Matches the schema defaults: Large text with the Traffic light theme.
 export function defaultModel() {
     const amber = {bg: 'rgba(255,191,0,0.7)', fg: 'rgba(255,255,255,1)'};
     return {

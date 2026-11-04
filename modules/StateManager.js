@@ -8,7 +8,7 @@ export default class StateManager {
         this.stateOverride = undefined;
         this.stateOverrideCounter = 0;
 
-        this.STATE_OVERRIDE_DURATION = 10
+        this.STATE_OVERRIDE_DURATION = 10;
 
         this.states = {};
         this.states[Constants.states['CONNECTED']] = {
@@ -104,15 +104,14 @@ export default class StateManager {
         let vpnState = (status && this.states[status.connectStatus]) || this.states.ERROR;
         if (status && !status.loggedin) vpnState = this.states['LOGGED OUT'];
 
-        // If a state override is active, increment it and override the state if appropriate
         if (status && this.stateOverride) {
             this.stateOverrideCounter += 1;
 
             // Vpn.getStatus() upper-cases the country, so compare it case-insensitively.
-            let overrideFromKey = (this.stateOverride.overrideKeys && (
+            const overrideFromKey = (this.stateOverride.overrideKeys && (
                 (this.stateOverride.overrideKeys[0] === 'countries' && this.stateOverride.overrideKeys[1].replace(/_/g, " ").toUpperCase() === String(status.country).toUpperCase()) ||
                 (this.stateOverride.overrideKeys[0] === 'cities' && this.stateOverride.overrideKeys[1].replace(/_/g, " ") === status.city) ||
-                (this.stateOverride.overrideKeys[0] === 'servers' && this.stateOverride.overrideKeys[1] === status.currentServer.replace('.nordvpn.com', ''))))
+                (this.stateOverride.overrideKeys[0] === 'servers' && this.stateOverride.overrideKeys[1] === status.currentServer.replace('.nordvpn.com', ''))));
 
             if (this.stateOverrideCounter > this.STATE_OVERRIDE_DURATION ||
                 (vpnState.clearsOverrideId === this.stateOverride.overrideId) || overrideFromKey) {
@@ -120,7 +119,6 @@ export default class StateManager {
                 this.stateOverride = undefined;
                 this.stateOverrideCounter = 0;
             } else {
-                // State override still active
                 vpnState = this.stateOverride;
             }
         }

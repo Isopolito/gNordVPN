@@ -52,7 +52,7 @@ function shortestSides(sides) {
 // Makes sure a hand-written declaration list ends in ';' so CSS appended after it still parses.
 const terminated = (css) => (css.endsWith(';') || css.endsWith('}') ? css : `${css};`);
 
-const asDeclarations = (pairs) => pairs.filter(([, value]) => value !== '' && value != null)
+const asDeclarations = (pairs) => pairs.filter(([, value]) => value !== '' && value !== null && value !== undefined)
     .map(([prop, value]) => `${prop}: ${value};`);
 
 // The shared CSS for every state: font-weight, border-radius, padding, margin, border, then advanced.common.

@@ -3,7 +3,7 @@ import {compile, sameStyles} from './StyleCompiler.js';
 import {parse} from './LegacyStyleParser.js';
 
 // Picks the model prefs should edit. `panel-appearance` is used only if it is valid and compiles to
-// what the legacy keys hold; otherwise the legacy keys win and are parsed (grill Q1). This only reads:
+// what the legacy keys hold; otherwise the legacy keys win and are parsed. This only reads:
 // it never writes a setting.
 // Returns {model, source: 'appearance' | 'legacy-empty' | 'legacy-malformed' | 'legacy-mismatch'}.
 export function loadModel({appearanceJson, panelStyles, commonCss}) {

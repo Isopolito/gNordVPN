@@ -3,7 +3,7 @@ import {
 } from './AppearanceModel.js';
 import {colorsEqual} from './Color.js';
 
-// Panel texts for each size. Copied from the old StylesManager._connectStylesButtons.
+// Panel texts for each size.
 export const SIZE_PRESETS = {
     small: {
         label: 'Small',
@@ -73,7 +73,7 @@ const RED = 'rgba(255,0,0,0.7)';
 
 const uniform = (bg, fg) => Object.fromEntries(GROUPS.map(group => [group, {bg, fg}]));
 
-// Shapes copied from the old `ccss` and `altCcss`.
+// The corner, weight, border and spacing of each theme's shape.
 const FILLED_SHAPE = {
     corner: 'pill',
     bold: true,
@@ -89,7 +89,7 @@ const OUTLINE_SHAPE = {
     margin: {...SPACING_PRESETS.normal.margin},
 };
 
-// Colors for each group, copied from the old styleCss, styleAltCss, monoCss and altMonoCss.
+// Colors for each group, per theme.
 export const THEME_PRESETS = {
     trafficLight: {
         label: 'Traffic light',
@@ -192,7 +192,7 @@ export function detectTheme(model) {
     return hit ?? 'custom';
 }
 
-// A fresh model for a size and theme: what the old size button produced with the old switches set.
+// A fresh model for a size and theme, with no overrides or advanced CSS.
 export function buildPreset(sizeKey, themeKey) {
     const empty = defaultModel();
     empty.version = MODEL_VERSION;

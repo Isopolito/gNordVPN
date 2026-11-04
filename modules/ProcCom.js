@@ -15,7 +15,7 @@ export default class ProcCom {
 
     // Only read-only commands pass a cancellable. Cancelling it rejects the call and kills the process.
     async execCommunicateAsync(command, cancellable = null) {
-        let argv = command.split(/\s+/);
+        const argv = command.split(/\s+/);
         const t = this._log.startTimer();
         const cmd = _cmdName(command);
         if (cancellable) cancellable.set_error_if_cancelled();

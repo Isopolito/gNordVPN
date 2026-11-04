@@ -152,7 +152,6 @@ export default GObject.registerClass(
             this._pendingRefresh = false;
 
             try {
-                // Stop the refreshes
                 this._clearTimeout();
 
                 const t = this._log.startTimer();
@@ -169,7 +168,6 @@ export default GObject.registerClass(
                 this._trackTransitional(status.currentState.stateName);
                 this._throttledMenuBuild(status);
 
-                // Update the menu and panel based on the current state
                 this._updateMenu(status);
                 this._syncUptime(status);
                 this._updateUptimeClock();
@@ -220,7 +218,6 @@ export default GObject.registerClass(
         _updateMenu(status) {
             if (!this._statusPopup || !this._statusLabel) return;
 
-            // Set the status text on the menu
             this._statusLabel.text = status.connectStatus;
 
             this._statusPopup.get_label_actor().set_text(status.connectStatus);
@@ -229,7 +226,7 @@ export default GObject.registerClass(
             menu.removeAll();
 
             let hasItems = false;
-            let statusToDisplay = [`country`, `city`, `currentServer`, `serverIp`, `transfer`, `uptime`];
+            const statusToDisplay = [`country`, `city`, `currentServer`, `serverIp`, `transfer`, `uptime`];
             statusToDisplay.forEach(key => {
                 if (status[key]) {
                     const label = key.replace(/([A-Z]+)/g, ` $1`).replace(/([A-Z][a-z])/g, ` $1`).replace(/^./, e => e.toUpperCase());
@@ -237,7 +234,7 @@ export default GObject.registerClass(
                     menu.addMenuItem(menuItem);
                     hasItems = true;
                 }
-            })
+            });
 
             if (!this._isLoggedIn) {
                 this._statusPopup.hide();
@@ -257,7 +254,6 @@ export default GObject.registerClass(
                 this._updateMenuLabel.visible = false;
             }
 
-            // Activate / deactivate menu items
             this._connectMenuItem.visible = status.currentState.canConnect;
             this._disconnectMenuItem.visible = status.currentState.canDisconnect;
 
@@ -279,7 +275,6 @@ export default GObject.registerClass(
         }
 
         async _disconnect() {
-            // Run the disconnect command
             this._vpn.disconnectVpn().then(() => {
                 // Set an override on the status as the command line status takes a while to catch up
                 if (!this._cancellable.is_cancelled()) this._overrideRefresh(Constants.status.disconnecting);
@@ -357,7 +352,6 @@ export default GObject.registerClass(
         }
 
         _clearTimeout() {
-            // Remove the refresh timer if active
             if (this._timeout) {
                 GLib.Source.remove(this._timeout);
                 this._timeout = undefined;
@@ -377,19 +371,16 @@ export default GObject.registerClass(
             this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
             this.menu.box.add_child(this._statusLabel);
 
-            // Optionally add `Update` status
             this._updateMenuLabel = new St.Label({visible: false, style_class: `updatelabel`});
             this.menu.box.add_child(this._updateMenuLabel);
 
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-            // Add `Connect` menu item
             this._connectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.connect);
             const connectMenuItemClickId = this._connectMenuItem.connect(`activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
             this._signals.register(connectMenuItemClickId, () => this._connectMenuItem.disconnect(connectMenuItemClickId));
             this.menu.addMenuItem(this._connectMenuItem);
 
-            // Add `Disconnect` menu item
             this._disconnectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.disconnect);
             const disconnectMenuItemClickId = this._disconnectMenuItem.connect(`activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
             this._signals.register(disconnectMenuItemClickId, () => this._disconnectMenuItem.disconnect(disconnectMenuItemClickId));
@@ -413,18 +404,15 @@ export default GObject.registerClass(
 
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-            // Add `Settings` menu item
             const settingsMenuItem = new PopupMenu.PopupMenuItem(`Settings`);
             this.menu.addMenuItem(settingsMenuItem);
             settingsMenuItem.connect(`activate`, this._openSettings.bind(this));
 
-            // Add `Login` menu item
             this._loginMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.login);
             const loginMenuItemClickId = this._loginMenuItem.connect(`activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
             this._signals.register(loginMenuItemClickId, () => this._loginMenuItem.disconnect(loginMenuItemClickId));
             this.menu.addMenuItem(this._loginMenuItem);
 
-            // Add `Logout` menu item
             this._logoutMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.logout);
             const logoutMenuItemClickId = this._logoutMenuItem.connect(`activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
             this._signals.register(logoutMenuItemClickId, () => this._logoutMenuItem.disconnect(logoutMenuItemClickId));
@@ -434,12 +422,9 @@ export default GObject.registerClass(
             this.add_child(this._panelIcon.button());
 
             this._panelIcon.button().connect(`button-press-event`, (actor, event) => {
-                //Only checking login state when clicking on menu
-                //Cannot check periodically because:
-                //If checking with `nordvpn account` it fetches from a server that limit request
-                //If checking with `nordvpn login` it generate a new url, preventing the use from login in
-                // Run checkLogin on idle so it doesn't block the menu from opening (~1s sync call).
-                // _pendingLoginCheck ensures only one idle is queued even on rapid clicks.
+                // Login is only checked on click, never on a timer: `nordvpn account` asks a server that rate limits
+                // requests, and `nordvpn login` creates a new login URL each time. _pendingLoginCheck allows one
+                // check at a time, so rapid clicks do not stack them.
                 if (!this._pendingLoginCheck) {
                     this._pendingLoginCheck = true;
                     this._vpn.checkLogin().then(loggedIn => {
@@ -453,8 +438,7 @@ export default GObject.registerClass(
                 }
             });
 
-            // Async initial login check — non-blocking.
-            // Only trigger a follow-up refresh if the login state changed.
+            // Only refresh again if the login state changed.
             this._vpn.checkLogin().then(loggedIn => {
                 const wasLoggedIn = this._isLoggedIn;
                 this._isLoggedIn = loggedIn;
@@ -472,7 +456,6 @@ export default GObject.registerClass(
                 this._timeout = null;
             }
             const delay = Math.max(1, timeoutDuration + this._refreshBackoffSec);
-            // Refresh after an interval
             this._timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
                 this._timeout = null; // the source is removed on return, don't remove it again
                 this._refresh().catch(e => this._log.error('unable to refresh', e));
@@ -542,7 +525,7 @@ export default GObject.registerClass(
         }
 
         getPanelPosition() {
-            return this._extSettings.get_string(`panel-position`)
+            return this._extSettings.get_string(`panel-position`);
         }
 
         getName() {
@@ -550,21 +533,19 @@ export default GObject.registerClass(
         }
 
         _moveIndicator() {
-            let position = this._extSettings.get_string(`panel-position`);
+            const position = this._extSettings.get_string(`panel-position`);
 
             let box;
             if (position === `left`) box = Main.panel._leftBox;
             else if (position === `center`) box = Main.panel._centerBox;
             else box = Main.panel._rightBox;
 
-            // Remove the indicator from its current parent
-            let container = this.container;
+            const container = this.container;
             container.show();
 
-            let parent = container.get_parent();
+            const parent = container.get_parent();
             if (parent) parent.remove_child(container);
 
-            // Add it to the new box using the updated method
             box.add_child(container);
         }
     });

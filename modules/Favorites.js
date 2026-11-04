@@ -8,7 +8,7 @@ export default class Favorites {
 
     _getData(a) { return this._settings.get_string(a); }
     _setData(a, b) { return this._settings.set_string(a, b); }
-    
+
     // The stored favorites object, or undefined when the stored text is not valid JSON or not an object.
     _read(favoriteType) {
         const data = this._getData(favoriteType) || '{}';
@@ -30,7 +30,7 @@ export default class Favorites {
         return {
             favorites,
             itemsMinusFavorites: items,
-        }
+        };
     }
 
     remove(favoriteType, item) {

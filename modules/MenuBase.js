@@ -20,12 +20,12 @@ export default class MenuBase {
         });
 
         return new St.Button({
-                style_class: `ci-action-btn`,
-                can_focus: true,
-                child: iconfav,
-                x_align: Clutter.ActorAlign.END,
-                x_expand: true,
-                y_expand: true
+            style_class: `ci-action-btn`,
+            can_focus: true,
+            child: iconfav,
+            x_align: Clutter.ActorAlign.END,
+            x_expand: true,
+            y_expand: true
         });
     }
 

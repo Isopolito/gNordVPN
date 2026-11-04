@@ -28,7 +28,7 @@ let _loginInFlight = false;
 export default class Vpn {
     constructor(settings) {
         this._log = new Logger('Vpn');
-        this._settings = settings
+        this._settings = settings;
         this._procCom = new ProcCom();
         this._vpnUtils = new VpnUtils();
         this._session = Soup.Session.new();
@@ -84,12 +84,11 @@ export default class Vpn {
     }
 
     async setSettingsFromNord() {
-        // Use async status check to determine if nordvpnd is running — avoids blocking sync call.
         const running = await this._isDaemonRunning(this._cancellable);
         const standardOut = await this._execAsyncIfRunning(CMD_FETCH_SETTINGS, running);
         if (!standardOut) return;
         for (const line of standardOut.split(`\n`)) {
-            let parts = line.split(`:`);
+            const parts = line.split(`:`);
             const settingName = this._vpnUtils.resolveSettingsKey(parts[0]);
             const settingValue = this._vpnUtils.resolveSettingsValue(parts[1]);
             if (!settingName || settingValue === undefined) continue;
@@ -118,9 +117,8 @@ export default class Vpn {
 
         if (!await this._isDaemonRunning()) return;
 
-        // Apply each setting independently — some may be rejected when conditionally
-        // invalid (e.g., obfuscate is unsupported with NordLynx). Best-effort matches
-        // the original sync behavior where non-zero exits were silently ignored.
+        // Each setting is applied independently: some are rejected when conditionally invalid
+        // (e.g., obfuscate is unsupported with NordLynx).
         const t = this._log.startTimer();
         await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
         await this._execBestEffort(`${CMD_SETTINGS} analytics ${analytics}`);
@@ -133,7 +131,7 @@ export default class Vpn {
         await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
         await this._execBestEffort(`${CMD_SETTINGS} technology ${technology}`);
 
-        // TODO: Why is this 2nd call to firewall needed to make things work?
+        // Firewall is set a second time because the settings only took effect with the repeat; the reason has not been found.
         await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
         this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 11});
     }
@@ -153,7 +151,7 @@ export default class Vpn {
         let vpnService;
         if (allAccountMessages.length > 2 && allAccountMessages[1].includes(`Email`)) {
             emailAddress = allAccountMessages[1].replace(`Email Address: `, ``);
-            vpnService = allAccountMessages[2].replace(`VPN Service: `, ``)
+            vpnService = allAccountMessages[2].replace(`VPN Service: `, ``);
         }
 
         return {emailAddress, vpnService};
@@ -203,10 +201,10 @@ export default class Vpn {
                     else if (msg.includes(`new version`)) updateMessage = msg;
                     else if (msg.includes(`Current server:`)) {
                         serverNumber = msg.match(/\d+/);
-                        currentServer = msg.replace(`Current server: `, ``)
+                        currentServer = msg.replace(`Current server: `, ``);
                     } else if (msg.includes(`Hostname:`)) {
                         serverNumber = msg.match(/\d+/);
-                        currentServer = msg.replace(`Hostname: `, ``)
+                        currentServer = msg.replace(`Hostname: `, ``);
                     }
                 }
             }
@@ -235,7 +233,7 @@ export default class Vpn {
             currentProtocol: currentProtocol || 'N/A',
             transfer: transfer || 'N/A',
             uptime: uptime || 'N/A'
-        }
+        };
     }
 
     isConnectThrottled() {
@@ -294,7 +292,7 @@ export default class Vpn {
         if (withId) {
             let countriesMap;
             try {
-                let data = await this._httpGet(`https://api.nordvpn.com/v1/servers/countries`);
+                const data = await this._httpGet(`https://api.nordvpn.com/v1/servers/countries`);
                 if (!data) return null;
                 countriesMap = data.reduce((acc, v) => {
                     acc[v['name']] = v['id'];
@@ -311,22 +309,22 @@ export default class Vpn {
         const standardOut = await this._execAsyncIfRunning(CMD_COUNTRIES, running);
         const countries = this._vpnUtils.processCityCountryOutput(standardOut);
 
-        let processedCountries = {};
-        for (let country of countries) {
+        const processedCountries = {};
+        for (const country of countries) {
             processedCountries[country.replace(/_/g, ` `)] = country;
         }
 
-        // If the list of countries from NordVpn cli is less then 5 there's most likely a problem with the connection.
+        // If the list of countries from NordVpn cli is fewer than 5 there's most likely a problem with the connection.
         // Better to return nothing so calling code can handle appropriately rather than a list of error message words
         if (Object.keys(processedCountries).length < 5) return null;
         return processedCountries;
     }
 
     async getCities(running = true) {
-        let citiesMax = this._settings.get_value('number-cities-per-countries').unpack() - 1;
-        let citiesSaved = this._settings.get_value('countries-selected-for-cities').deep_unpack();
+        const citiesMax = this._settings.get_value('number-cities-per-countries').unpack() - 1;
+        const citiesSaved = this._settings.get_value('countries-selected-for-cities').deep_unpack();
 
-        let processedCities = {};
+        const processedCities = {};
 
         for (let i = 0; i < citiesSaved.length; i++) {
             const standardOut = await this._execAsyncIfRunning(`${CMD_CITIES} ${citiesSaved[i]}`, running);
@@ -334,8 +332,8 @@ export default class Vpn {
 
             for (let j = 0; j < cities.length; j++) {
                 if (j > citiesMax) break;
-                let c = (citiesSaved[i] + `, ` + cities[j].replace(`,`, ``)).replace(/_/g, ` `);
-                let d = cities[j].replace(`,`, ``);
+                const c = (citiesSaved[i] + `, ` + cities[j].replace(`,`, ``)).replace(/_/g, ` `);
+                const d = cities[j].replace(`,`, ``);
                 processedCities[c] = d;
             }
         }
@@ -347,17 +345,17 @@ export default class Vpn {
         // getServers only uses the HTTP API — it works regardless of daemon state.
         // Using nordvpn undocumented public api since the app does not give that information
         // Useful source: https://sleeplessbeastie.eu/2019/02/18/how-to-use-public-nordvpn-api/
-        let countriesMax = this._settings.get_value('number-servers-per-countries').unpack();
-        let countriesSaved = this._settings.get_value('countries-selected-for-servers').deep_unpack();
+        const countriesMax = this._settings.get_value('number-servers-per-countries').unpack();
+        const countriesSaved = this._settings.get_value('countries-selected-for-servers').deep_unpack();
 
-        let url = `https://api.nordvpn.com/v1/servers/recommendations?limit=` + countriesMax
-        let technology = this._settings.get_string(`technology`);
+        let url = `https://api.nordvpn.com/v1/servers/recommendations?limit=` + countriesMax;
+        const technology = this._settings.get_string(`technology`);
         if (technology === 'NORDLYNX') {
             url += `&filters[servers_technologies][identifier]=wireguard_udp`;
 
         } else if (technology === 'OPENVPN') {
-            let obfuscate = this._settings.get_boolean(`obfuscate`);
-            let protocol = this._settings.get_string(`protocol`);
+            const obfuscate = this._settings.get_boolean(`obfuscate`);
+            const protocol = this._settings.get_string(`protocol`);
 
             if (protocol === `UDP`) {
                 if (obfuscate) url += `&filters[servers_technologies][identifier]=openvpn_xor_udp`;
@@ -370,10 +368,10 @@ export default class Vpn {
 
         url += `&filters[servers_groups][identifier]=legacy_standard`;
 
-        let servers = {}
+        const servers = {};
         try {
             for (let i = 0; i < countriesSaved.length; i++) {
-                let data = await this._httpGet(url + `&filters[country_id]=` + countriesSaved[i]);
+                const data = await this._httpGet(url + `&filters[country_id]=` + countriesSaved[i]);
                 if (data) {
                     data.forEach(e => {
                         servers[e['name']] = e['hostname'].replace('.nordvpn.com', '');

@@ -218,9 +218,9 @@ export default class StylesManager {
                 const row = new Adw.ActionRow({title: name, use_markup: false});
                 const edit = new Gtk.Button({label: 'Edit', valign: Gtk.Align.CENTER, tooltip_text: 'Load this profile and edit it'});
                 edit.connect('clicked', () => this._loadProfile(name));
-                const save = new Gtk.Button({label: 'Save', valign: Gtk.Align.CENTER, tooltip_text: 'Save your changes into this profile'});
-                save.add_css_class('suggested-action');
-                save.connect('clicked', () => {
+                const saveChanges = new Gtk.Button({label: 'Save', valign: Gtk.Align.CENTER, tooltip_text: 'Save your changes into this profile'});
+                saveChanges.add_css_class('suggested-action');
+                saveChanges.connect('clicked', () => {
                     this._updateActiveProfile();
                     this._syncUi();
                 });
@@ -234,7 +234,7 @@ export default class StylesManager {
                     rebuild();
                 });
                 row.add_suffix(discard);
-                row.add_suffix(save);
+                row.add_suffix(saveChanges);
                 row.add_suffix(edit);
                 row.add_suffix(del);
                 group.add(row);
@@ -242,9 +242,9 @@ export default class StylesManager {
                     const active = this._activeProfile === name;
                     const changed = active && this._profileHasChanges();
                     edit.visible = !active;
-                    save.visible = active;
+                    saveChanges.visible = active;
                     discard.visible = active;
-                    save.sensitive = changed;
+                    saveChanges.sensitive = changed;
                     discard.sensitive = changed;
                     row.subtitle = active ? (changed ? 'Editing: unsaved changes' : 'Editing') : '';
                 });

@@ -34,17 +34,17 @@ export default class ConnectionMenu extends MenuBase {
     updateFavorite() {
         const connectionFavs = this._favorites.get(this._favoritesKey).favorites;
 
-        //connectionFavs-favConnectionItems
-        let toAddToFav = Common.safeObjectKeys(connectionFavs).filter(x => !this._favConnectionItems.includes(x));
+        // Favorites added since the last update.
+        const toAddToFav = Common.safeObjectKeys(connectionFavs).filter(x => !this._favConnectionItems.includes(x));
         toAddToFav.forEach(connection => {
             this._toggleConnectionMenuItem(connection, false);
-        })
+        });
 
-        //_favConnectionItems-connectionFavs
-        let toRemoveFromFav = this._favConnectionItems.filter(x => !Common.safeObjectKeys(connectionFavs).includes(x))
+        // Favorites removed since the last update.
+        const toRemoveFromFav = this._favConnectionItems.filter(x => !Common.safeObjectKeys(connectionFavs).includes(x));
         toRemoveFromFav.forEach(connection => {
             this._toggleConnectionMenuItem(connection, true);
-        })
+        });
     }
 
     rebuild(running = false) {
@@ -84,8 +84,6 @@ export default class ConnectionMenu extends MenuBase {
 
     _scheduleToggle(connection, isFavorite) {
         // Each click gets its own idle so rapid clicks on different rows all land.
-        // Writing GSettings on idle (not in the button-press handler) prevents
-        // destroying the menu item that is currently dispatching the event.
         this._scheduleIdle(() => {
             if (isFavorite) this._favorites.remove(this._favoritesKey, connection);
             else this._favorites.add(this._favoritesKey, connection, this._connections[connection]);
@@ -93,7 +91,7 @@ export default class ConnectionMenu extends MenuBase {
     }
 
     _toggleConnectionMenuItem(connection, isFavorite) {
-        let d = this._destroyMap[connection];
+        const d = this._destroyMap[connection];
         if (d) {
             this._signals.disconnect([d.menuItemClickId, d.menuItem.favoritePressId]);
             d.icofavBtn.destroy();

@@ -13,7 +13,7 @@ export default class PanelIcon {
     }
 
     updateStyle() {
-        let savedStyle = this._settings.get_value('panel-styles').deep_unpack();
+        const savedStyle = this._settings.get_value('panel-styles').deep_unpack();
 
         this.uiMap = {};
         Object.keys(savedStyle).forEach(key => {
@@ -31,15 +31,15 @@ export default class PanelIcon {
     update(status, uptimeSec) {
         if (!status) return;
 
-        let config = this.uiMap[status.currentState.stateName];
-        let msg = config.panelText
+        const config = this.uiMap[status.currentState.stateName];
+        let msg = config.panelText;
         if (status.currentState.stateName === Constants.states.CONNECTED)
             msg = PanelText.render(msg, status, {uptimeSec});
 
         this._label.text = msg || "Style Missing MSG";
         let style = this.commonStyle;
         style += config.css;
-        this._label.set_style(style); 
+        this._label.set_style(style);
     }
 
     button() {

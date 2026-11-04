@@ -21,7 +21,7 @@ export default class VpnUtils {
 
     resolveSettingsKey(text) {
         if (!text) return;
-        const normalizedText = text.trim().toLowerCase()
+        const normalizedText = text.trim().toLowerCase();
 
         if (normalizedText === `firewall`) return `firewall`;
         if (normalizedText.includes(`tech`)) return `technology`;
@@ -33,9 +33,6 @@ export default class VpnUtils {
         if (normalizedText === `notify`) return `notify`;
         if (normalizedText === `auto-connect`) return `autoconnect`;
         if (normalizedText === `ipv6`) return `ipv6`;
-
-        // Currently these settings are not supported in this extension
-        //if (normalizedText === `dns`) return `dns`;
 
         return null;
     }

@@ -20,7 +20,7 @@ export function isTransitional(stateName) {
 // a transitional state has lasted less than FAST_POLL_WINDOW_MS, otherwise use the user's interval.
 export function nextDelaySec({stateName, menuOpen, transitionalSinceMs, nowMs, userIntervalSec}) {
     if (menuOpen) return FAST_POLL_SEC;
-    if (isTransitional(stateName) && transitionalSinceMs != null && nowMs - transitionalSinceMs < FAST_POLL_WINDOW_MS)
+    if (isTransitional(stateName) && transitionalSinceMs !== null && transitionalSinceMs !== undefined && nowMs - transitionalSinceMs < FAST_POLL_WINDOW_MS)
         return FAST_POLL_SEC;
     return userIntervalSec;
 }
