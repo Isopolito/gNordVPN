@@ -215,8 +215,6 @@ export default GObject.registerClass(
         }
 
         _updateMenu(status) {
-            if (!this._statusPopup || !this._statusLabel) return;
-
             this._statusLabel.text = status.connectStatus;
 
             this._statusPopup.get_label_actor().set_text(status.connectStatus);

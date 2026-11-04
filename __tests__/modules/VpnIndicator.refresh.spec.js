@@ -17,6 +17,7 @@ GLib.timeout_add_seconds = (priority, delay, cb) => {
 };
 GLib.Source = {remove: (id) => { timers.removed.push(id); }};
 
+const {installMenuFakes} = await import('../helpers/indicatorMenus.js');
 const {default: VpnIndicator} = await import('../../modules/shell/VpnIndicator.js');
 const {default: StateManager} = await import('../../modules/shell/StateManager.js');
 const Constants = await import('../../modules/constants.js');
@@ -45,6 +46,7 @@ function createIndicator({status = makeStatus(Constants.states.DISCONNECTED), lo
     indicator._countryMenu = menuStub();
     indicator._cityMenu = menuStub();
     indicator._serverMenu = menuStub();
+    installMenuFakes(indicator);
     indicator._isLoggedIn = loggedIn;
     return indicator;
 }
@@ -387,8 +389,7 @@ describe('VpnIndicator._refresh', () => {
 
         it('keeps polling with the retry delay when updating the menu throws', async () => {
             const indicator = createIndicator({status: makeStatus(Constants.states.CONNECTED)});
-            indicator._statusPopup = {get_label_actor: () => { throw new Error('widget gone'); }};
-            indicator._statusLabel = {text: 'Checking...'};
+            indicator._statusPopup.get_label_actor = () => { throw new Error('widget gone'); };
             await indicator._refresh();
             expect(indicator._refreshBackoffSec).toBe(5);
             expect(lastDelay()).toBe(REFRESH_TIMEOUT + 5);

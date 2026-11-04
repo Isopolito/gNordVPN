@@ -18,6 +18,7 @@ GLib.timeout_add_seconds = (priority, delay, cb) => {
 };
 GLib.Source = {remove: (id) => { timers.removed.push(id); timers.active.delete(id); }};
 
+const {installMenuFakes} = await import('../helpers/indicatorMenus.js');
 const {default: VpnIndicator} = await import('../../modules/shell/VpnIndicator.js');
 const {default: StateManager} = await import('../../modules/shell/StateManager.js');
 const Constants = await import('../../modules/constants.js');
@@ -64,6 +65,7 @@ function createIndicator(template = TEMPLATE) {
     indicator._countryMenu = menuStub();
     indicator._cityMenu = menuStub();
     indicator._serverMenu = menuStub();
+    installMenuFakes(indicator);
     indicator._isLoggedIn = true;
     return indicator;
 }
