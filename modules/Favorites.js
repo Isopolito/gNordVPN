@@ -15,7 +15,7 @@ export default class Favorites {
         let favorites;
         try {
             favorites = JSON.parse(data);
-        } catch (e) {
+        } catch {
             return undefined;
         }
         return favorites !== null && typeof favorites === 'object' && !Array.isArray(favorites) ? favorites : undefined;

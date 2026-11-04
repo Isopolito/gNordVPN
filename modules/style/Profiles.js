@@ -20,7 +20,7 @@ export function parseProfiles(json) {
     let raw;
     try {
         raw = JSON.parse(json);
-    } catch (e) {
+    } catch {
         return [];
     }
     if (!isObject(raw)) return [];
@@ -36,8 +36,6 @@ export function serializeProfiles(list) {
     return JSON.stringify(Object.fromEntries(list.map(({name, model}) => [name, model])));
 }
 
-export const findProfile = (list, name) => list.find(p => p.name === cleanName(name)) ?? null;
-
 // A new list with the model saved under the cleaned name; an existing name is overwritten in place.
 // Returns null when the name is not valid.
 export function saveProfile(list, name, model) {
@@ -50,12 +48,3 @@ export function saveProfile(list, name, model) {
 }
 
 export const deleteProfile = (list, name) => list.filter(p => p.name !== cleanName(name));
-
-// A new list with `from` renamed to `to`. Returns null if `from` is missing, `to` is invalid,
-// or `to` is already taken by another profile.
-export function renameProfile(list, from, to) {
-    const clean = cleanName(to);
-    if (clean === '' || !findProfile(list, from)) return null;
-    if (clean !== cleanName(from) && list.some(p => p.name === clean)) return null;
-    return list.map(p => (p.name === cleanName(from) ? {...p, name: clean} : p));
-}

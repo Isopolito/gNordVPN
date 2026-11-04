@@ -124,7 +124,7 @@ export default class StylesManager {
             if (!snap || typeof snap.panelStyles !== 'object' || snap.panelStyles === null ||
                 typeof snap.commonCss !== 'string') return null;
             return snap;
-        } catch (e) {
+        } catch {
             return null;
         }
     }

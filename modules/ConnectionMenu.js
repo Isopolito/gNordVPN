@@ -42,13 +42,13 @@ export default class ConnectionMenu extends MenuBase {
         //connectionFavs-favConnectionItems
         let toAddToFav = Common.safeObjectKeys(connectionFavs).filter(x => !this._favConnectionItems.includes(x));
         toAddToFav.forEach(connection => {
-            this._toggleConnectionMenuItem(connection, !true);
+            this._toggleConnectionMenuItem(connection, false);
         })
 
         //_favConnectionItems-connectionFavs
         let toRemoveFromFav = this._favConnectionItems.filter(x => !Common.safeObjectKeys(connectionFavs).includes(x))
         toRemoveFromFav.forEach(connection => {
-            this._toggleConnectionMenuItem(connection, !false);
+            this._toggleConnectionMenuItem(connection, true);
         })
     }
 

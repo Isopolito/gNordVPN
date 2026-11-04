@@ -51,7 +51,7 @@ describe('Vpn read-only calls carry the cancellable', () => {
 });
 
 describe('Vpn state-changing calls never carry a cancellable', () => {
-    it('connectVpn with a query, disconnect, login, logout and defaults', async () => {
+    it('connectVpn with a query, disconnect, login and logout', async () => {
         const procCom = createRecordingProcCom({responses: {'nordvpn login': 'Continue in the browser: http://x'}});
         const vpn = vpnWith(procCom);
         Gio.app_info_launch_default_for_uri = () => {};
@@ -59,8 +59,7 @@ describe('Vpn state-changing calls never carry a cancellable', () => {
         await vpn.disconnectVpn();
         await vpn.loginVpn();
         await vpn.logoutVpn();
-        await vpn.setToDefaults();
-        expect(procCom.calls.length).toBeGreaterThanOrEqual(7);
+        expect(procCom.calls.length).toBeGreaterThanOrEqual(6);
         expect(procCom.calls.every(c => c.cancellable === null)).toBe(true);
     });
 

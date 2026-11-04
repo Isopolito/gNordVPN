@@ -138,10 +138,6 @@ export default class Vpn {
         this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 11});
     }
 
-    async setToDefaults() {
-        return this._procCom.execCommunicateAsync(`${CMD_SETTINGS} defaults`);
-    }
-
     async getAccount() {
         let standardOut;
         try {

@@ -125,8 +125,6 @@ export default class StateManager {
             }
         }
 
-        const resolved = {...vpnState};
-
-        return resolved;
+        return {...vpnState};
     }
 }

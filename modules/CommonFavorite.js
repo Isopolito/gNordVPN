@@ -14,7 +14,6 @@ export default class CommonFavorite extends MenuBase {
         this._connectionCallback = connectionCallback;
         this._isBuilt = false;
         this.favList = {};
-        this.itemList = {};
         this._destroyMap = {};
         this.prevShowHide = true;
 
@@ -34,7 +33,6 @@ export default class CommonFavorite extends MenuBase {
         this._isBuilt = false;
         this._destroyMap = {};
         this.favList = {};
-        this.itemList = {};
     }
     
     updateFavorite() {
@@ -65,7 +63,6 @@ export default class CommonFavorite extends MenuBase {
         this._isBuilt = false;
         this._destroyMap = {};
         this.favList = {};
-        this.itemList = {};
         this.build();
     }
 
@@ -89,14 +86,14 @@ export default class CommonFavorite extends MenuBase {
         menuItem.favoritePressId = icofavBtn.connect(`button-press-event`, () => {
                 // Defer both the GSettings write and widget mutation to idle so this
                 // callback doesn't destroy the menu item currently dispatching the event.
-                this._scheduleToggle(favorite, false);
+                this._scheduleToggle(favorite);
             });
 
         this._signals.register(menuItem.favoritePressId, () => icofavBtn.disconnect(menuItem.favoritePressId));
         return menuItem;
     }
 
-    _scheduleToggle(favorite, toAdd) {
+    _scheduleToggle(favorite) {
         // Capture the type now (before idle) since favList may change by the time idle fires.
         const favoriteType = this.favList[favorite]?.type;
         // Each click gets its own idle so rapid clicks all land. Writing GSettings on
@@ -133,7 +130,6 @@ export default class CommonFavorite extends MenuBase {
             if (!byType[this.favList[key].type]) byType[this.favList[key].type] = [];
             byType[this.favList[key].type].push(key);
         })
-        Object.keys(byType).forEach(key => byType[key]);
 
         let idx = 0;
         let typeFound;
@@ -165,7 +161,6 @@ export default class CommonFavorite extends MenuBase {
         else this._favoriteMenu.menu.removeAll();
 
         this.favList = {};
-        this.itemList = {};
         Object.keys(Constants.favorites).forEach(key => {
             let getFav = this._favorites.get(Constants.favorites[key]).favorites;
             let getFavReformat = {};
@@ -177,7 +172,6 @@ export default class CommonFavorite extends MenuBase {
             
             for (const fav of Object.keys(getFav).sort()) {
                 const menuItem = this._buildFavoriteMenuItem(fav);
-                this.itemList[fav] = menuItem;
                 this._favoriteMenu.menu.addMenuItem(menuItem);
             }
         })

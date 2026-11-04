@@ -489,12 +489,12 @@ export default class GnordVpnPrefs {
 
         cityTreeView.get_selection().connect('changed', (w) => {
             if (this._cityPopulating) return;
-            let [cityPathList, cityStore] = cityTreeView.get_selection().get_selected_rows();
+            let [cityPathList] = cityTreeView.get_selection().get_selected_rows();
 
             let selected = [];
             cityPathList.forEach(path => {
                 let model = cityTreeView.get_model();
-                let [ok, iter] = model.get_iter(path);
+                let [, iter] = model.get_iter(path);
                 selected.push(this._countryMap[model.get_value(iter, 0)]);
             });
 
@@ -564,12 +564,12 @@ export default class GnordVpnPrefs {
 
         serverTreeView.get_selection().connect('changed', (w) => {
             if (this._serverPopulating) return;
-            let [serverPathList, serverStore] = serverTreeView.get_selection().get_selected_rows();
+            let [serverPathList] = serverTreeView.get_selection().get_selected_rows();
 
             let selected = [];
             serverPathList.forEach(path => {
                 let model = serverTreeView.get_model();
-                let [ok, iter] = model.get_iter(path);
+                let [, iter] = model.get_iter(path);
                 selected.push(this._countryMapWithID[model.get_value(iter, 0)]);
             });
 
@@ -588,7 +588,7 @@ export default class GnordVpnPrefs {
     }
 
     _setWindowSize(window) {
-        const [pmWidth, pmHeight, pmScale] = this._getPrimaryMonitorInfo();
+        const [pmWidth, pmHeight] = this._getPrimaryMonitorInfo();
         const width = pmWidth * .8;
         const height = pmHeight * .6;
 

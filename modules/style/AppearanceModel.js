@@ -176,7 +176,7 @@ export function parseStored(json) {
     let raw;
     try {
         raw = JSON.parse(json);
-    } catch (e) {
+    } catch {
         return null;
     }
     if (!isObject(raw) || raw.version !== MODEL_VERSION) return null;

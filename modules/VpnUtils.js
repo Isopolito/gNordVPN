@@ -1,7 +1,7 @@
 export default class VpnUtils {
     // Remove the junk that shows up from messages in the nordvpn output
     processCityCountryOutput = (input) => {
-        input = input.replace(/\e\[\d+[\x6d]/, ''); // Remove color formatting
+        input = input.replace(/e\[\d+[\x6d]/, ''); // Remove color formatting
         input = input.replace(/^[\W_]+|\W+/, '\n'); // Remove any leading junk
         const countries = input.split('\n').map(c => c.trim()); // Split and trim each country name
         const validCountries = countries.filter(c => /\b\w[\w\s'-]*\b/.test(c)); // Keep valid country names

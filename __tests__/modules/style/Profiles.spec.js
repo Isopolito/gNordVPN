@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
-    MAX_NAME_LENGTH, cleanName, deleteProfile, findProfile, isValidName, parseProfiles, renameProfile,
+    MAX_NAME_LENGTH, cleanName, deleteProfile, isValidName, parseProfiles,
     saveProfile, serializeProfiles,
 } from '../../../modules/style/Profiles.js';
 import {defaultModel, normalize} from '../../../modules/style/AppearanceModel.js';
@@ -32,7 +32,7 @@ describe('Profiles', () => {
         list = saveProfile(list, 'B', defaultModel());
         list = saveProfile(list, ' A ', buildPreset('small', 'mono'));
         expect(list.map(p => p.name)).toEqual(['A', 'B']);
-        expect(findProfile(list, 'A').model).toEqual(normalize(buildPreset('small', 'mono')));
+        expect(list.find(p => p.name === 'A').model).toEqual(normalize(buildPreset('small', 'mono')));
         expect(saveProfile(list, '  ', liveModel)).toBeNull();
     });
 
@@ -43,13 +43,8 @@ describe('Profiles', () => {
         expect(list[0].model.shape.bold).not.toBe(model.shape.bold);
     });
 
-    it('deletes and renames, refusing collisions', () => {
+    it('deletes a profile by name', () => {
         let list = saveProfile(saveProfile([], 'A', liveModel), 'B', liveModel);
-        expect(renameProfile(list, 'A', 'B')).toBeNull();
-        expect(renameProfile(list, 'A', ' ')).toBeNull();
-        expect(renameProfile(list, 'zzz', 'C')).toBeNull();
-        expect(renameProfile(list, 'A', 'C').map(p => p.name)).toEqual(['C', 'B']);
-        expect(renameProfile(list, 'A', 'A').map(p => p.name)).toEqual(['A', 'B']);
         list = deleteProfile(list, 'A');
         expect(list.map(p => p.name)).toEqual(['B']);
     });

@@ -46,7 +46,7 @@ function scanKeys() {
     }
     // Favorites/ConnectionMenu take their key as a constructor argument from constants.js and
     // read/write it through Favorites._getData/_setData, so the literal never appears at the call.
-    for (const key of [...Object.values(Constants.favorites), ...Object.values(Constants.panel)]) {
+    for (const key of Object.values(Constants.favorites)) {
         add(reads, key, 'modules/constants.js');
         add(writes, key, 'modules/constants.js');
     }

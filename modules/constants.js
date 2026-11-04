@@ -1,7 +1,3 @@
-export const panel = {
-    panelStyles: 'panel-styles'
-}
-
 export const favorites = {
     favoriteCountries: 'favorite-countries',
     favoriteCities: 'favorite-cities',
