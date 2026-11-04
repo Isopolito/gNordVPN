@@ -52,7 +52,7 @@
         <key name="debug-logging" type="b">
             <default>false</default>
             <summary>Write detailed debug and timing lines to the journal</summary>
-            <description>Warnings and errors are always logged. Turn this on with gsettings when debugging; debug-logs.sh reads the output.</description>
+            <description>Warnings and errors are always logged. Turn this on in the General page of the preferences, or with gsettings; debug-logs.sh reads the output.</description>
         </key>
         <key name="refresh-timeout" type="i">
             <range min="1" max="120"/>

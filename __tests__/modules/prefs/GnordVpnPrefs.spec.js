@@ -69,6 +69,18 @@ describe('GnordVpnPrefs', () => {
             expect(sw.active).toBe(false);
         });
 
+        it('binds the debug logging switch both ways, off by default', async () => {
+            const {settings, grid} = await buildPrefs();
+            const label = 'Write debug messages to the log:';
+            const sw = grid(label).controlFor(label);
+            expect(sw.active).toBe(false);
+
+            sw.userSet(true);
+            expect(settings.get_boolean('debug-logging')).toBe(true);
+            settings.set_boolean('debug-logging', false);
+            expect(sw.active).toBe(false);
+        });
+
         it('binds the refresh spinner adjustment to refresh-timeout', async () => {
             const {settings, grid} = await buildPrefs();
             const label = 'Seconds between NordVpn status calls (will take affect on restart)';

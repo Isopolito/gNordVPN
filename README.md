@@ -75,7 +75,7 @@ Run `npm ci && npm test`. Tests use Jest; `gi://...` and `resource:///...` impor
 
 ### Debug logging
 
-The extension only logs warnings and errors. To see debug and timing lines (what `debug-logs.sh` reads), turn on the `debug-logging` setting:
+The extension only logs warnings and errors. To see debug and timing lines (what `debug-logs.sh` reads), turn on "Write debug messages to the log" in the General page of the preferences, or set `debug-logging` yourself:
 
 `gsettings --schemadir ~/.local/share/gnome-shell/extensions/gnordvpn-local@isopolito/schemas set org.gnome.shell.extensions.gnordvpn-local debug-logging true`
 

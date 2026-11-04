@@ -132,8 +132,10 @@ export default class GnordVpnPrefs {
             Gio.SettingsBindFlags.DEFAULT
         );
 
+        this._addToggleRow(generalGrid, 4, "Write debug messages to the log:", 'debug-logging');
+
         const resetAll = new Gtk.Button({label: "Reset All Settings"});
-        generalGrid.attach(resetAll, 0, 4, 2, 1);
+        generalGrid.attach(resetAll, 0, 5, 2, 1);
 
         return {generalGrid, resetAll};
     }
