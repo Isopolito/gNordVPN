@@ -437,8 +437,8 @@ describe('VpnIndicator.destroy', () => {
         const indicator = createIndicator();
         const order = [];
         indicator._vpn.destroy = jest.fn(() => order.push(indicator._cancellable.is_cancelled() ? 'vpn-after-cancel' : 'vpn-before-cancel'));
-        ['_countryMenu', '_cityMenu', '_serverMenu'].forEach(k => { indicator[k].disable = jest.fn(); });
-        indicator._commonFavorite = {disable: jest.fn()};
+        ['_countryMenu', '_cityMenu', '_serverMenu'].forEach(k => { indicator[k].destroy = jest.fn(); });
+        indicator._commonFavorite = {destroy: jest.fn()};
         indicator._signals = {disconnectAll: jest.fn(() => order.push('signals'))};
         return {indicator, order};
     }
@@ -450,7 +450,7 @@ describe('VpnIndicator.destroy', () => {
         indicator.destroy();
         expect(order).toEqual(['vpn-after-cancel', 'signals']);
         expect(vpn.destroy).toHaveBeenCalledTimes(1);
-        menus.forEach(m => expect(m.disable).toHaveBeenCalledTimes(1));
+        menus.forEach(m => expect(m.destroy).toHaveBeenCalledTimes(1));
         expect(indicator._vpn).toBeNull();
         expect(indicator._signals).toBeNull();
         expect(indicator._panelIcon).toBeNull();

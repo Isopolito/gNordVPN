@@ -1,3 +1,4 @@
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
@@ -23,7 +24,8 @@ export default class ConnectionMenu extends MenuBase {
         this._pendingIdleIds = [];
         this._buildGen = 0;
         this._buildInFlight = false;
-        this._isDisposed = false;
+        // Marks teardown: a build that was in flight when destroy() ran must not retry.
+        this._cancellable = new Gio.Cancellable();
 
         this._favorites = new Favorites(settings);
         this._vpn = new Vpn(settings);
@@ -64,7 +66,7 @@ export default class ConnectionMenu extends MenuBase {
         // the in-flight fetch will see a gen mismatch, and _throttledMenuBuild retries later.
         const id = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._pendingIdleIds = this._pendingIdleIds.filter(i => i !== id);
-            if (!this._isDisposed) this.tryBuild(running).catch(e => this._log.error('tryBuild after rebuild failed', e));
+            this.tryBuild(running).catch(e => this._log.error('tryBuild after rebuild failed', e));
             return GLib.SOURCE_REMOVE;
         });
         this._pendingIdleIds.push(id);
@@ -79,7 +81,7 @@ export default class ConnectionMenu extends MenuBase {
         const menuItemClickId = menuItem.connect(`activate`, (actor, event) => {
             const target = this._connections[connection];
             const connType = this._connectionType;
-            if (!target || this._isDisposed || this._vpn.isConnectThrottled()) return;
+            if (!target || this._vpn.isConnectThrottled()) return;
             this._vpn.connectVpn(target).catch(e => this._log.error('connectVpn failed', e));
             this._connectionCallback(Constants.status.reconnecting, [connType, target]);
         });
@@ -115,9 +117,7 @@ export default class ConnectionMenu extends MenuBase {
 
     _toggleConnectionMenuItem(connection, isFavorite) {
         let d = this._destroyMap[connection];
-        if (d && !d.isDisposed) {
-
-            d.isDisposed = true;
+        if (d) {
             this._signals.disconnect([d.menuItemClickId, d.menuItem.favoritePressId]);
             d.icofavBtn.destroy();
             d.menuItem.destroy();
@@ -163,8 +163,9 @@ export default class ConnectionMenu extends MenuBase {
         return this._connectionMenu;
     }
 
-    disable() {
-        this._isDisposed = true;
+    destroy() {
+        this._cancellable.cancel();
+        this._vpn.destroy();
         ++this._buildGen;
         this._pendingIdleIds.forEach(id => GLib.Source.remove(id));
         this._pendingIdleIds = [];
@@ -179,7 +180,7 @@ export default class ConnectionMenu extends MenuBase {
         if (!this._connectionMenu)
             this._connectionMenu = new PopupMenu.PopupSubMenuMenuItem(this._connectionLabel);
 
-        if (this._isBuilt || this._isDisposed || this._buildInFlight) return;
+        if (this._isBuilt || this._buildInFlight) return;
         const gen = ++this._buildGen;
         this._buildInFlight = true;
 
@@ -188,6 +189,7 @@ export default class ConnectionMenu extends MenuBase {
         try {
             connections = await this._vpn.getConnectionList(this._connectionType, running);
         } catch (e) {
+            if (Common.isCancelled(e)) return;
             this._log.warn('tryBuild fetch failed', {type: this._connectionType, error: e?.message});
             return;
         } finally {
@@ -196,17 +198,17 @@ export default class ConnectionMenu extends MenuBase {
             // gen mismatch means rebuild() ran and bumped _buildGen — we need a fresh fetch.
             // If gen still matches, the fetch completed legitimately (no-data / error / success);
             // normal refresh cycles handle the next attempt, so no retry is needed here.
-            if (gen !== this._buildGen && !this._isDisposed) {
+            if (gen !== this._buildGen && !this._cancellable.is_cancelled()) {
                 const retryId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                     this._pendingIdleIds = this._pendingIdleIds.filter(i => i !== retryId);
-                    if (!this._isDisposed) this.tryBuild(running).catch(e => this._log.error('tryBuild retry failed', e));
+                    this.tryBuild(running).catch(e => this._log.error('tryBuild retry failed', e));
                     return GLib.SOURCE_REMOVE;
                 });
                 this._pendingIdleIds.push(retryId);
             }
         }
 
-        if (gen !== this._buildGen || this._isDisposed) return;
+        if (gen !== this._buildGen) return;
 
         if (!connections || Object.keys(connections).length === 0) {
             if (this._connectionMenu.menu.numMenuItems === 0)

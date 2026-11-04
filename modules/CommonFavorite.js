@@ -23,13 +23,14 @@ export default class CommonFavorite extends MenuBase {
         this._vpn = new Vpn(settings);
         this._signals = new Signals();
         this._pendingIdleIds = [];
-        this._isDisposed = false;
     }
 
-    disable() {
-        this._isDisposed = true;
+    destroy() {
+        this._vpn.destroy();
         this._pendingIdleIds.forEach(id => GLib.Source.remove(id));
         this._pendingIdleIds = [];
+        this._signals.disconnectAll();
+        this._favoriteMenu.destroy();
         this._isBuilt = false;
         this._destroyMap = {};
         this.favList = {};
@@ -73,7 +74,7 @@ export default class CommonFavorite extends MenuBase {
         const menuItemClickId = menuItem.connect(`activate`, (actor, event) => {
                 const item = this.favList[favorite]?.item;
                 const rawType = this.favList[favorite]?.type;
-                if (!item || !rawType || this._isDisposed || this._vpn.isConnectThrottled()) return;
+                if (!item || !rawType || this._vpn.isConnectThrottled()) return;
                 this._vpn.connectVpn(item).catch(e => this._log.error('connectVpn failed', e));
                 const type = rawType.substring(rawType.lastIndexOf('-') + 1);
                 this._connectionCallback(Constants.status.reconnecting, [type, item]);

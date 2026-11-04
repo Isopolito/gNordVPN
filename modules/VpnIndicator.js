@@ -525,10 +525,10 @@ export default GObject.registerClass(
             // Reset so the next enable() gets an immediate throttledMenuBuild on first refresh
             this._lastMenuBuild = null;
 
-            this._commonFavorite.disable();
-            this._countryMenu.disable();
-            this._cityMenu.disable();
-            this._serverMenu.disable();
+            this._commonFavorite.destroy();
+            this._countryMenu.destroy();
+            this._cityMenu.destroy();
+            this._serverMenu.destroy();
             this._signals.disconnectAll();
 
             if (this._settingsChangedId) {

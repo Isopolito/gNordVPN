@@ -185,10 +185,10 @@ describe('VpnIndicator uptime clock', () => {
         await indicator._refresh();
         const id = indicator._uptimeTimer;
         indicator._vpn.destroy = jest.fn();
-        indicator._commonFavorite = {disable: jest.fn()};
-        indicator._countryMenu.disable = jest.fn();
-        indicator._cityMenu.disable = jest.fn();
-        indicator._serverMenu.disable = jest.fn();
+        indicator._commonFavorite = {destroy: jest.fn()};
+        indicator._countryMenu.destroy = jest.fn();
+        indicator._cityMenu.destroy = jest.fn();
+        indicator._serverMenu.destroy = jest.fn();
         indicator._signals = {disconnectAll: jest.fn()};
         indicator.destroy();
         expect(timers.removed).toContain(id);

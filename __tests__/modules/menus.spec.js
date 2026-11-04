@@ -1,4 +1,5 @@
 import {jest} from '@jest/globals';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -93,6 +94,7 @@ function fakeVpn(list) {
         getConnectionList: jest.fn(async () => (list ? {...list} : list)), // copy: Favorites.get() deletes from the object it is given
         connectVpn: jest.fn(async () => 'ok'),
         isConnectThrottled: jest.fn(() => false),
+        destroy: jest.fn(),
     };
 }
 
@@ -225,12 +227,47 @@ describe('ConnectionMenu', () => {
             expect(menu._vpn.getConnectionList).toHaveBeenCalledTimes(1);
         });
 
-        it('does not build once disposed', async () => {
+        it('does not build when destroy() cancels the fetch that was in flight', async () => {
             const {menu} = createMenu();
             await menu.tryBuild(true); // creates the submenu
-            menu.disable();
+            menu._isBuilt = false;
+            menu._vpn.getConnectionList = jest.fn(async () => {
+                menu.destroy();
+                throw new GLib.Error(0, Gio.IOErrorEnum.CANCELLED, 'Operation was cancelled');
+            });
             await menu.tryBuild(true);
             expect(menu.isBuilt).toBe(false);
+            expect(idle.queue).toEqual([]);
+        });
+    });
+
+    describe('destroy', () => {
+        it('cancels, destroys its Vpn, removes pending idles and destroys the submenu', async () => {
+            const {menu} = createMenu();
+            await menu.tryBuild(true);
+            press(menu.menu.menu.items.find(i => i.label === 'Albania'));
+            expect(idle.queue).toHaveLength(1);
+            const submenu = menu.menu;
+            menu.destroy();
+            expect(menu._cancellable.is_cancelled()).toBe(true);
+            expect(menu._vpn.destroy).toHaveBeenCalledTimes(1);
+            expect(idle.queue).toEqual([]);
+            expect(submenu.destroyed).toBe(true);
+        });
+
+        it('does not retry a rebuild that was invalidated while a fetch was in flight', async () => {
+            const {menu} = createMenu();
+            await menu.tryBuild(true);
+            menu.rebuild(true);
+            idle.queue = [];
+            let finishFetch;
+            menu._vpn.getConnectionList = jest.fn(() => new Promise(res => { finishFetch = () => res({Albania: 'Albania'}); }));
+            const pending = menu.tryBuild(true);
+            menu.rebuild(true);
+            menu.destroy();
+            finishFetch();
+            await pending;
+            expect(idle.queue).toEqual([]);
         });
     });
 
@@ -371,6 +408,21 @@ describe('CommonFavorite', () => {
         common._vpn = fakeVpn({});
         return {common, settings, callback};
     }
+
+    it('destroy() destroys its Vpn and submenu, removes pending idles and disconnects its signals', () => {
+        const {common} = createCommon({'favorite-countries': {Albania: 'Albania'}});
+        common.build();
+        const submenu = common.menu;
+        const disconnectAll = jest.spyOn(common._signals, 'disconnectAll');
+        press(submenu.menu.items[0]);
+        expect(idle.queue).toHaveLength(1);
+        common.destroy();
+        expect(common._vpn.destroy).toHaveBeenCalledTimes(1);
+        expect(disconnectAll).toHaveBeenCalledTimes(1);
+        expect(idle.queue).toEqual([]);
+        expect(submenu.destroyed).toBe(true);
+        expect(common.favList).toEqual({});
+    });
 
     it('builds from all three favorite lists, grouped countries, cities, servers', () => {
         const {common} = createCommon({
