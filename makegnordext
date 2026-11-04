@@ -38,6 +38,7 @@ delete_random_files_and_directories() {
         -o -name "*.png" \
         -o -name "*.sh" \
         -o -name "package-lock.json" \
+        -o -name "eslint.config.js" \
         -o -name "makegnordext" \
         -o -name ".*.swp" \
         -o -name "*.swp" \

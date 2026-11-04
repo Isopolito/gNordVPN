@@ -4,13 +4,17 @@
   "description": "<img align=\"right\" src=\"img/screenshot1.png\">",
   "main": "extension.js",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "lint": "eslint extension.js prefs.js modules"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0",
     "jest": "^29.7.0"
   },
   "jest": {
