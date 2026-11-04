@@ -1,5 +1,4 @@
 import St from 'gi://St';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import * as Constants from './constants.js';
 import * as PanelText from './PanelText.js';
@@ -30,7 +29,7 @@ export default class PanelIcon {
     }
 
     update(status, uptimeSec) {
-        if (!status || this._label.isDisposed) return;
+        if (!status) return;
 
         let config = this.uiMap[status.currentState.stateName];
         let msg = config.panelText
@@ -57,7 +56,6 @@ export default class PanelIcon {
         });
 
         this._label = new St.Label();
-        this._label.connect('destroy', () => this._label.isDisposed = true);
         this._button.set_child(this._label);
     }
 }

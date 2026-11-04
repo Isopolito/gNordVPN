@@ -1,4 +1,6 @@
 import {jest} from '@jest/globals';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import {createFakeProcCom} from '../../helpers/vpn.js';   // first: patches the gi stubs Vpn.js needs
 import {FakeSettings} from '../../helpers/FakeSettings.js';
 import {fakes, registry, resetRegistry, findAll, createWindow} from '../../helpers/fakeGtk.js';
@@ -339,5 +341,51 @@ describe('GnordVpnPrefs', () => {
             expect(settings.get_int('number-cities-per-countries')).toBe(25);
             expect(settings.get_int('number-servers-per-countries')).toBe(7);
         });
+    });
+});
+
+describe('closing the preferences window', () => {
+    const cancelled = () => new GLib.Error(0, Gio.IOErrorEnum.CANCELLED, 'Operation was cancelled');
+
+    // A fake CLI that honours the cancellable like the real ProcCom, and can hold `nordvpn countries`.
+    function openWindow({holdCountries} = {}) {
+        resetRegistry();
+        const fake = new FakeSettings({});
+        const prefs = new GnordVpnPrefs(fake, {name: 'gNordVpn-Local', version: '1'});
+        const calls = [];
+        prefs._vpn._procCom = {
+            calls,
+            async execCommunicateAsync(cmd, cancellable = null) {
+                calls.push({cmd, cancellable});
+                if (cmd === 'nordvpn countries' && holdCountries) await holdCountries;
+                if (cancellable?.is_cancelled()) throw cancelled();
+                if (cmd === 'nordvpn status' || cmd === 'nordvpn account') throw new Error('down');
+                return COUNTRIES_OUT;
+            },
+        };
+        prefs._vpn._httpGet = async () => COUNTRY_IDS;
+        const window = createWindow();
+        prefs.fillPreferencesWindow(window);
+        return {prefs, window, calls};
+    }
+
+    it('cancels the pending reads and leaves the country lists unpopulated', async () => {
+        let release;
+        const {prefs, window} = openWindow({holdCountries: new Promise(r => { release = r; })});
+        window.emit('destroy');
+        expect(prefs._vpn._cancellable.is_cancelled()).toBe(true);
+        release();
+        await flush();
+        expect(prefs._countryNames).toEqual([]);   // still the empty list set before the fetch
+    });
+
+    it('still runs Apply after the window closed, because its commands are never cancelled', async () => {
+        const {prefs, window, calls} = openWindow();
+        await flush();
+        window.emit('destroy');
+        calls.length = 0;
+        await prefs._vpn.applySettingsToNord();
+        expect(calls.length).toBeGreaterThan(0);
+        expect(calls.every(c => c.cancellable === null)).toBe(true);
     });
 });

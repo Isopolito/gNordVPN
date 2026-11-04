@@ -9,7 +9,7 @@ import Soup from 'gi://Soup';
 // Vpn.js talks to GNOME through gi:// modules, which jest maps to the stubs in __mocks__/gi.
 globalThis.log = () => {};
 globalThis.logError = () => {};
-Soup.Session = {new: () => ({}), prototype: {}};
+Soup.Session = {new: () => ({abort() {}}), prototype: {}};
 Soup.get_major_version = () => 3;
 GLib.get_monotonic_time = () => 0;
 GLib.PRIORITY_DEFAULT = 0;

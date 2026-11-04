@@ -195,14 +195,9 @@ export default class GnordVpnPrefs {
         logoutButton.set_sensitive(false);
         accountsGrid.attach(logoutButton, 1, 5, 1, 1);
 
-        let accountPageDestroyed = false;
-        accountsGrid.connect('destroy', () => { accountPageDestroyed = true; });
-
         const refreshAccountButton = new Gtk.Button({label: "Refresh"});
         const refreshAccount = async () => {
             let account = await this._vpn.getAccount();
-            // Guard: prefs window may have closed while the async call was in flight
-            if (accountPageDestroyed) return;
             let loggedIn = !!account.emailAddress;
             accountEmail.set_text(account.emailAddress || "");
             accountStatus.set_text(account.vpnService || "");
@@ -612,13 +607,12 @@ export default class GnordVpnPrefs {
     }
 
     fillPreferencesWindow(window) {
-        let windowDestroyed = false;
-        window.connect('destroy', () => { windowDestroyed = true; });
+        // Closing the window cancels the pending reads below. Apply, login and logout still run to completion.
+        window.connect('destroy', () => this._vpn.destroy());
 
         // Sync GSettings from NordVPN then refresh combo boxes — they use one-time reads
         // at construction so we must update them after the async fetch resolves.
         this._vpn.setSettingsFromNord().then(() => {
-            if (windowDestroyed) return;
             if (this._techCbox) {
                 const tech = this._settings.get_string('technology');
                 this._techCbox.set_active(tech === 'OPENVPN' ? 0 : 1);
@@ -696,11 +690,16 @@ export default class GnordVpnPrefs {
         // Populate tree stores after async fetch — the pages exist but start empty.
         // Both stores need country names, so fetch both maps in parallel then populate.
 
+        // A failed lookup leaves that map empty; a cancelled one (window closed) stops the whole population.
+        const mapOrNull = (promise, what) => promise.catch(e => {
+            if (Common.isCancelled(e)) throw e;
+            this._log.error(`prefs ${what} load failed`, e);
+            return null;
+        });
         Promise.all([
-            this._vpn.getCountries(false, true).catch(e => { this._log.error('prefs country load failed', e); return null; }),
-            this._vpn.getCountries(true, true).catch(e => { this._log.error('prefs country ID load failed', e); return null; }),
+            mapOrNull(this._vpn.getCountries(false, true), 'country'),
+            mapOrNull(this._vpn.getCountries(true, true), 'country ID'),
         ]).then(([countryMap, countryMapWithID]) => {
-            if (windowDestroyed) return;
             this._countryMap = countryMap || {};
             this._countryMapWithID = countryMapWithID || {};
             this._countryNames = Common.safeObjectKeys(this._countryMap);
@@ -728,7 +727,7 @@ export default class GnordVpnPrefs {
                     serverTreeView.get_selection().select_iter(iter);
             });
             this._serverPopulating = false;
-        });
+        }).catch(e => this._log.error('prefs country population failed', e));
 
         const resetManager = new ResetManager();
         resetAll.connect('clicked', () => {
