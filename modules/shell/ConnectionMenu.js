@@ -1,12 +1,12 @@
 import Gio from 'gi://Gio';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import Vpn from './Vpn.js';
+import Vpn from '../Vpn.js';
 import Favorites from './Favorites.js';
 import MenuBase from './MenuBase.js';
-import * as Common from './common.js';
-import * as Constants from './constants.js';
-import Logger from './Logger.js';
+import * as Common from '../common.js';
+import * as Constants from '../constants.js';
+import Logger from '../Logger.js';
 
 export default class ConnectionMenu extends MenuBase {
     constructor(connectionLabel, connectionType, favoritesKey, connectionCallback, settings) {

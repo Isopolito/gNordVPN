@@ -1,4 +1,4 @@
-import Logger from './Logger.js';
+import Logger from '../Logger.js';
 
 export default class Favorites {
     constructor(settings) {

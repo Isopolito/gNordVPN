@@ -4,10 +4,10 @@ import {fileURLToPath} from 'node:url';
 import {
     MAX_NAME_LENGTH, cleanName, deleteProfile, isValidName, parseProfiles,
     saveProfile, serializeProfiles,
-} from '../../../modules/style/Profiles.js';
-import {defaultModel, normalize} from '../../../modules/style/AppearanceModel.js';
-import {buildPreset} from '../../../modules/style/Presets.js';
-import {parse} from '../../../modules/style/LegacyStyleParser.js';
+} from '../../../modules/prefs/style/Profiles.js';
+import {defaultModel, normalize} from '../../../modules/prefs/style/AppearanceModel.js';
+import {buildPreset} from '../../../modules/prefs/style/Presets.js';
+import {parse} from '../../../modules/prefs/style/LegacyStyleParser.js';
 
 const live = JSON.parse(fs.readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), '../../fixtures/panel-live.json'), 'utf8'));

@@ -18,7 +18,7 @@ const files = [...listJs('modules'), 'extension.js', 'prefs.js'].sort();
 describe('module load smoke test', () => {
     it('finds the modules, including VpnIndicator and prefs/*', () => {
         expect(files).toEqual(expect.arrayContaining([
-            path.join('modules', 'VpnIndicator.js'),
+            path.join('modules', 'shell', 'VpnIndicator.js'),
             path.join('modules', 'prefs', 'GnordVpnPrefs.js'),
             path.join('modules', 'prefs', 'StylesManager.js'),
             path.join('modules', 'prefs', 'ResetManager.js'),

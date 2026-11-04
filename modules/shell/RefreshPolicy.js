@@ -1,4 +1,4 @@
-import * as Constants from './constants.js';
+import * as Constants from '../constants.js';
 
 export const FAST_POLL_SEC = 2;
 export const FAST_POLL_WINDOW_MS = 30_000;

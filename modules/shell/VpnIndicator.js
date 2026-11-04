@@ -7,17 +7,17 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import Vpn from './Vpn.js';
+import Vpn from '../Vpn.js';
 import Signals from './Signals.js';
 import ConnectionMenu from './ConnectionMenu.js';
 import StateManager from './StateManager.js';
 import CommonFavorite from './CommonFavorite.js';
 import PanelIcon from './PanelIcon.js';
-import * as Constants from './constants.js';
-import Logger from './Logger.js';
-import {isCancelled} from './common.js';
+import * as Constants from '../constants.js';
+import Logger from '../Logger.js';
+import {isCancelled} from '../common.js';
 import * as RefreshPolicy from './RefreshPolicy.js';
-import * as PanelText from './PanelText.js';
+import * as PanelText from '../PanelText.js';
 
 export default GObject.registerClass(
     class VpnIndicator extends PanelMenu.Button {

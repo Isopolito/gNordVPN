@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {parse} from '../../../modules/style/LegacyStyleParser.js';
-import {compile, normalizeDeclarations, sameStyles} from '../../../modules/style/StyleCompiler.js';
-import {STATE_KEYS} from '../../../modules/style/AppearanceModel.js';
+import {parse} from '../../../modules/prefs/style/LegacyStyleParser.js';
+import {compile, normalizeDeclarations, sameStyles} from '../../../modules/prefs/style/StyleCompiler.js';
+import {STATE_KEYS} from '../../../modules/prefs/style/AppearanceModel.js';
 import {LEGACY_SIZES, LEGACY_THEMES, legacyGenerate} from '../../helpers/legacyStyles.js';
 import {loadSchema, parseVariantText} from '../../helpers/FakeSettings.js';
 

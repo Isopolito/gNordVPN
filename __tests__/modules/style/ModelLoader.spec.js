@@ -1,8 +1,8 @@
-import {loadModel} from '../../../modules/style/ModelLoader.js';
-import {parse} from '../../../modules/style/LegacyStyleParser.js';
-import {compile} from '../../../modules/style/StyleCompiler.js';
-import {serialize} from '../../../modules/style/AppearanceModel.js';
-import {applyTheme, buildPreset} from '../../../modules/style/Presets.js';
+import {loadModel} from '../../../modules/prefs/style/ModelLoader.js';
+import {parse} from '../../../modules/prefs/style/LegacyStyleParser.js';
+import {compile} from '../../../modules/prefs/style/StyleCompiler.js';
+import {serialize} from '../../../modules/prefs/style/AppearanceModel.js';
+import {applyTheme, buildPreset} from '../../../modules/prefs/style/Presets.js';
 import {legacyGenerate} from '../../helpers/legacyStyles.js';
 
 const legacy = legacyGenerate('large', 'trafficLight');

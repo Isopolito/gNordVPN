@@ -77,9 +77,9 @@ const runIdle = () => { const q = idle.queue; idle.queue = []; q.forEach(e => e.
 globalThis.log = () => {};
 globalThis.logError = () => {};
 
-const {default: ConnectionMenu} = await import('../../modules/ConnectionMenu.js');
-const {default: CommonFavorite} = await import('../../modules/CommonFavorite.js');
-const {default: Favorites} = await import('../../modules/Favorites.js');
+const {default: ConnectionMenu} = await import('../../modules/shell/ConnectionMenu.js');
+const {default: CommonFavorite} = await import('../../modules/shell/CommonFavorite.js');
+const {default: Favorites} = await import('../../modules/shell/Favorites.js');
 const Constants = await import('../../modules/constants.js');
 
 beforeEach(() => {

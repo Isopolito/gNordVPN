@@ -3,11 +3,11 @@ import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 
-import {CORNERS, GROUPS, GROUP_OF, SPACING_PRESETS, STATE_KEYS, clone, serialize} from '../style/AppearanceModel.js';
-import {compile, sameStyles} from '../style/StyleCompiler.js';
-import {loadModel} from '../style/ModelLoader.js';
-import {SIZE_PRESETS, THEME_PRESETS, applySize, applyTheme, detectSize, detectTheme} from '../style/Presets.js';
-import {deleteProfile, isValidName, parseProfiles, saveProfile, serializeProfiles} from '../style/Profiles.js';
+import {CORNERS, GROUPS, GROUP_OF, SPACING_PRESETS, STATE_KEYS, clone, serialize} from './style/AppearanceModel.js';
+import {compile, sameStyles} from './style/StyleCompiler.js';
+import {loadModel} from './style/ModelLoader.js';
+import {SIZE_PRESETS, THEME_PRESETS, applySize, applyTheme, detectSize, detectTheme} from './style/Presets.js';
+import {deleteProfile, isValidName, parseProfiles, saveProfile, serializeProfiles} from './style/Profiles.js';
 import {render} from '../PanelText.js';
 
 // Tokens that render in the CONNECTED panel text.

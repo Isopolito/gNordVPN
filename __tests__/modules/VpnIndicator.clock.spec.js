@@ -18,8 +18,8 @@ GLib.timeout_add_seconds = (priority, delay, cb) => {
 };
 GLib.Source = {remove: (id) => { timers.removed.push(id); timers.active.delete(id); }};
 
-const {default: VpnIndicator} = await import('../../modules/VpnIndicator.js');
-const {default: StateManager} = await import('../../modules/StateManager.js');
+const {default: VpnIndicator} = await import('../../modules/shell/VpnIndicator.js');
+const {default: StateManager} = await import('../../modules/shell/StateManager.js');
 const Constants = await import('../../modules/constants.js');
 
 const flush = () => new Promise(res => setImmediate(res));

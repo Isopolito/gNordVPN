@@ -1,4 +1,4 @@
-import StateManager from '../../modules/StateManager.js';
+import StateManager from '../../modules/shell/StateManager.js';
 import * as Constants from '../../modules/constants.js';
 
 globalThis.log = () => {};

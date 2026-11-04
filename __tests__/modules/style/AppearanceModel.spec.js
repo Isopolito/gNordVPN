@@ -1,7 +1,7 @@
 import {
     GROUPS, GROUP_OF, STATE_KEYS, SPACING_PRESETS, buildGroups, defaultModel, detectSpacing, normalize,
     parseStored, resolveState, serialize,
-} from '../../../modules/style/AppearanceModel.js';
+} from '../../../modules/prefs/style/AppearanceModel.js';
 import * as Constants from '../../../modules/constants.js';
 
 describe('group membership', () => {

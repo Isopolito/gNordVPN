@@ -1,4 +1,4 @@
-import {colorsEqual, parseColor} from '../../../modules/style/Color.js';
+import {colorsEqual, parseColor} from '../../../modules/prefs/style/Color.js';
 
 describe('Color', () => {
     it('parses rgb, rgba, hex and common names', () => {

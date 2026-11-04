@@ -1,6 +1,6 @@
-import {compile, compileCommon, expandSides, normalizeDeclarations, sameStyles, splitDeclarations} from '../../../modules/style/StyleCompiler.js';
-import {defaultModel, STATE_KEYS} from '../../../modules/style/AppearanceModel.js';
-import {parse} from '../../../modules/style/LegacyStyleParser.js';
+import {compile, compileCommon, expandSides, normalizeDeclarations, sameStyles, splitDeclarations} from '../../../modules/prefs/style/StyleCompiler.js';
+import {defaultModel, STATE_KEYS} from '../../../modules/prefs/style/AppearanceModel.js';
+import {parse} from '../../../modules/prefs/style/LegacyStyleParser.js';
 import {loadSchema, parseVariantText} from '../../helpers/FakeSettings.js';
 
 describe('compile', () => {

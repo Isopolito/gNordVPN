@@ -2,7 +2,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {setDebugLogging} from './modules/Logger.js';
-import VpnIndicator from './modules/VpnIndicator.js';
+import VpnIndicator from './modules/shell/VpnIndicator.js';
 
 export default class GnordVpnLocal extends Extension {
     enable() {

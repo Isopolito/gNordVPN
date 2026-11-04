@@ -1,6 +1,6 @@
-import {parse} from '../../../modules/style/LegacyStyleParser.js';
-import {compile} from '../../../modules/style/StyleCompiler.js';
-import {GROUPS, STATE_KEYS, resolveState} from '../../../modules/style/AppearanceModel.js';
+import {parse} from '../../../modules/prefs/style/LegacyStyleParser.js';
+import {compile} from '../../../modules/prefs/style/StyleCompiler.js';
+import {GROUPS, STATE_KEYS, resolveState} from '../../../modules/prefs/style/AppearanceModel.js';
 import {legacyGenerate} from '../../helpers/legacyStyles.js';
 
 const uniformStyles = (css, text = 't') => Object.fromEntries(STATE_KEYS.map(key => [key, {panelText: text, css}]));

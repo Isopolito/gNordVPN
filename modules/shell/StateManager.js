@@ -1,5 +1,5 @@
-import * as Constants from './constants.js';
-import Logger from './Logger.js';
+import * as Constants from '../constants.js';
+import Logger from '../Logger.js';
 
 export default class StateManager {
     constructor() {

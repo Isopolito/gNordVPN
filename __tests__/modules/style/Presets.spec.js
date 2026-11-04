@@ -1,6 +1,6 @@
-import {SIZE_PRESETS, THEME_PRESETS, applySize, applyTheme, buildPreset, detectTheme} from '../../../modules/style/Presets.js';
-import {compile, normalizeDeclarations} from '../../../modules/style/StyleCompiler.js';
-import {STATE_KEYS, defaultModel, normalize, resolveState} from '../../../modules/style/AppearanceModel.js';
+import {SIZE_PRESETS, THEME_PRESETS, applySize, applyTheme, buildPreset, detectTheme} from '../../../modules/prefs/style/Presets.js';
+import {compile, normalizeDeclarations} from '../../../modules/prefs/style/StyleCompiler.js';
+import {STATE_KEYS, defaultModel, normalize, resolveState} from '../../../modules/prefs/style/AppearanceModel.js';
 import {LEGACY_SIZES, LEGACY_THEMES, LEGACY_PANEL_TEXTS, legacyGenerate} from '../../helpers/legacyStyles.js';
 
 describe('presets reproduce the old StylesManager output', () => {

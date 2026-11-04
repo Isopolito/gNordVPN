@@ -1,5 +1,5 @@
 import {jest} from '@jest/globals';
-import Signals from '../../modules/Signals.js';
+import Signals from '../../modules/shell/Signals.js';
 
 globalThis.log = () => {};
 globalThis.logError = () => {};

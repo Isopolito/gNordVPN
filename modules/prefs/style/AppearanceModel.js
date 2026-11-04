@@ -1,4 +1,4 @@
-import * as Constants from '../constants.js';
+import * as Constants from '../../constants.js';
 
 export const MODEL_VERSION = 1;
 

@@ -1,4 +1,4 @@
-import {nextDelaySec, isTransitional, FAST_POLL_SEC, FAST_POLL_WINDOW_MS} from '../../modules/RefreshPolicy.js';
+import {nextDelaySec, isTransitional, FAST_POLL_SEC, FAST_POLL_WINDOW_MS} from '../../modules/shell/RefreshPolicy.js';
 import * as Constants from '../../modules/constants.js';
 
 const S = Constants.states;

@@ -1,7 +1,7 @@
 import St from 'gi://St';
 
-import * as Constants from './constants.js';
-import * as PanelText from './PanelText.js';
+import * as Constants from '../constants.js';
+import * as PanelText from '../PanelText.js';
 
 export default class PanelIcon {
     constructor(settings) {
