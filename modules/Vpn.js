@@ -246,7 +246,7 @@ export default class Vpn {
             // a spawn failure) means something is genuinely broken — re-throw so _refresh()
             // can engage its exponential backoff instead of hammering a failing subprocess.
             if (!(e instanceof Error)) throw e;
-            this._log.warn('getStatus: nordvpnd not running or exited non-zero', {error: String(e)});
+            this._log.debug('getStatus: nordvpnd not running or exited non-zero', {error: String(e)});
         }
 
         const resolved = connectStatus || 'N/A';

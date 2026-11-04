@@ -49,6 +49,11 @@
         <key name="countries-selected-for-servers" type="ai">
             <default>[]</default>
         </key>
+        <key name="debug-logging" type="b">
+            <default>false</default>
+            <summary>Write detailed debug and timing lines to the journal</summary>
+            <description>Warnings and errors are always logged. Turn this on with gsettings when debugging; debug-logs.sh reads the output.</description>
+        </key>
         <key name="refresh-timeout" type="i">
             <range min="1" max="120"/>
             <default>15</default>
