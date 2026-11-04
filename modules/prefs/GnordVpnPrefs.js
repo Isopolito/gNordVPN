@@ -204,6 +204,17 @@ export default class GnordVpnPrefs {
         return accountsGrid;
     }
 
+    // A "label: switch" row bound to the boolean setting `key`. Returns the switch.
+    _addToggleRow(grid, row, labelText, key) {
+        const label = new Gtk.Label({label: labelText, halign: Gtk.Align.START, visible: true});
+        grid.attach(label, 0, row, 1, 1);
+
+        const toggle = new Gtk.Switch({active: this._settings.get_boolean(key), halign: Gtk.Align.END, visible: true});
+        grid.attach(toggle, 1, row, 1, 1);
+        this._settings.bind(key, toggle, `active`, Gio.SettingsBindFlags.DEFAULT);
+        return toggle;
+    }
+
     _createConnectionsPage() {
         const connectionsGrid = new Gtk.Grid({
             margin_start: 18, margin_top: 10, column_spacing: 12, row_spacing: 12, visible: true
@@ -249,95 +260,13 @@ export default class GnordVpnPrefs {
         connectionsGrid.attach(autoConnectLabel, 0, 1, 1, 1);
         connectionsGrid.attach(autoConnectToggle, 1, 1, 1, 1);
 
-        const cybersecLabel = new Gtk.Label({
-            label: `Enable CyberSec:`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(cybersecLabel, 0, 2, 1, 1);
-
-        const cyberSecToggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`cybersec`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(cyberSecToggle, 1, 2, 1, 1);
-        this._settings.bind(`cybersec`, cyberSecToggle, `active`, Gio.SettingsBindFlags.DEFAULT);
-
-        const firewallLabel = new Gtk.Label({
-            label: `Enable Firewall:`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(firewallLabel, 0, 3, 1, 1);
-
-        const firewallToggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`firewall`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(firewallToggle, 1, 3, 1, 1);
-        this._settings.bind(`firewall`, firewallToggle, `active`, Gio.SettingsBindFlags.DEFAULT);
-
-        const killswitchLabel = new Gtk.Label({
-            label: `Enable Killswitch:`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(killswitchLabel, 0, 4, 1, 1);
-
-        const killswitchToggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`killswitch`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(killswitchToggle, 1, 4, 1, 1);
-        this._settings.bind(`killswitch`, killswitchToggle, `active`, Gio.SettingsBindFlags.DEFAULT);
-
-        const obfuscateLabel = new Gtk.Label({
-            label: `Enable Obfuscate:`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(obfuscateLabel, 0, 5, 1, 1);
-
-        const obfuscateToggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`obfuscate`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(obfuscateToggle, 1, 5, 1, 1);
-        this._settings.bind(`obfuscate`, obfuscateToggle, `active`, Gio.SettingsBindFlags.DEFAULT);
-
-        const analyticsLabel = new Gtk.Label({
-            label: `Enable Analyics (send anonymous usage to NordVpn):`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(analyticsLabel, 0, 6, 1, 1);
-
-        const analyticsToggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`analytics`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(analyticsToggle, 1, 6, 1, 1);
-        this._settings.bind(`analytics`, analyticsToggle, `active`, Gio.SettingsBindFlags.DEFAULT);
-
-        const ipv6Label = new Gtk.Label({
-            label: `Enable IPv6:`,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        connectionsGrid.attach(ipv6Label, 0, 7, 1, 1);
-
-        const ipV6Toggle = new Gtk.Switch({
-            active: this._settings.get_boolean(`ipv6`),
-            halign: Gtk.Align.END,
-            visible: true
-        });
-        connectionsGrid.attach(ipV6Toggle, 1, 7, 1, 1);
-        this._settings.bind(`ipv6`, ipV6Toggle, `active`, Gio.SettingsBindFlags.DEFAULT);
+        const toggle = (row, label, key) => this._addToggleRow(connectionsGrid, row, label, key);
+        toggle(2, `Enable CyberSec:`, `cybersec`);
+        toggle(3, `Enable Firewall:`, `firewall`);
+        toggle(4, `Enable Killswitch:`, `killswitch`);
+        const obfuscateToggle = toggle(5, `Enable Obfuscate:`, `obfuscate`);
+        toggle(6, `Enable Analyics (send anonymous usage to NordVpn):`, `analytics`);
+        toggle(7, `Enable IPv6:`, `ipv6`);
 
         const protocolLabel = new Gtk.Label({
             label: `Select Protocol:`,
@@ -416,153 +345,88 @@ export default class GnordVpnPrefs {
         return box;
     }
 
-    _createCitiesPage() {
-        const cityGrid = new Gtk.Grid({
+    // A "max per country" spinner and a multi-select list of country names. The selection is written to
+    // `settingKey` as a GVariant of `variantType`, holding `valueOf(countryName)` for each selected row.
+    _createCountryTree({maxLabel, maxSettingKey, selectLabel, settingKey, variantType, populatingKey, valueOf, rowHeight}) {
+        const grid = new Gtk.Grid({
             margin_start: 18, margin_top: 10, column_spacing: 12, row_spacing: 12, visible: true
         });
 
-        const maxCityPerCountryLabel = new Gtk.Label({
-            label: `Max cities per country displayed:`, halign: Gtk.Align.START, visible: true
-        });
-        cityGrid.attach(maxCityPerCountryLabel, 0, 0, 1, 1);
+        const maxLabelWidget = new Gtk.Label({label: maxLabel, halign: Gtk.Align.START, visible: true});
+        grid.attach(maxLabelWidget, 0, 0, 1, 1);
 
-        const maxCityPerCountryInput = new Gtk.SpinButton();
-        maxCityPerCountryInput.set_sensitive(true);
-        maxCityPerCountryInput.set_range(0, 10000);
-        maxCityPerCountryInput.set_value(0);
-        maxCityPerCountryInput.set_increments(1, 2);
+        const maxInput = new Gtk.SpinButton();
+        maxInput.set_sensitive(true);
+        maxInput.set_range(0, 10000);
+        maxInput.set_value(0);
+        maxInput.set_increments(1, 2);
+        grid.attach(maxInput, 1, 0, 1, 1);
+        this._settings.bind(maxSettingKey, maxInput, `value`, Gio.SettingsBindFlags.DEFAULT);
 
-        cityGrid.attach(maxCityPerCountryInput, 1, 0, 1, 1);
-
-        this._settings.bind(`number-cities-per-countries`, maxCityPerCountryInput, `value`, Gio.SettingsBindFlags.DEFAULT);
-
-        const citySelectLabel = new Gtk.Label({
-            label: `Select countries for cities tab:\n<small>Hold down CTRL to select multiple</small>`,
+        const selectLabelWidget = new Gtk.Label({
+            label: selectLabel,
             use_markup: true,
             halign: Gtk.Align.START,
             visible: true
         });
-        cityGrid.attach(citySelectLabel, 0, 1, 1, 1);
+        grid.attach(selectLabelWidget, 0, 1, 1, 1);
 
-        const cityStore = new Gtk.TreeStore();
-        cityStore.set_column_types([GObject.TYPE_STRING]);
+        const store = new Gtk.TreeStore();
+        store.set_column_types([GObject.TYPE_STRING]);
 
-        const cityColumnRenderer = new Gtk.CellRendererText();
-        cityColumnRenderer.height = 30;
-        const cityColumn = new Gtk.TreeViewColumn({
+        const renderer = new Gtk.CellRendererText();
+        if (rowHeight) renderer.height = rowHeight;
+        const column = new Gtk.TreeViewColumn({
             title: "Countries",
             expand: true,
             min_width: 200
         });
-        cityColumn.pack_start(cityColumnRenderer, true);
-        cityColumn.add_attribute(cityColumnRenderer, "text", 0);
+        column.pack_start(renderer, true);
+        column.add_attribute(renderer, "text", 0);
 
-        const cityTreeView = new Gtk.TreeView({
-            model: cityStore
-        });
-        cityTreeView.insert_column(cityColumn, 0);
-        cityTreeView.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE);
+        const treeView = new Gtk.TreeView({model: store});
+        treeView.insert_column(column, 0);
+        treeView.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE);
 
-        const cityTreeIterMap = {};
-        this._cityPopulating = false;
+        const iterMap = {};
+        this[populatingKey] = false;
 
-        cityTreeView.get_selection().connect('changed', (w) => {
-            if (this._cityPopulating) return;
-            const [cityPathList] = cityTreeView.get_selection().get_selected_rows();
+        treeView.get_selection().connect('changed', () => {
+            if (this[populatingKey]) return;
+            const [pathList] = treeView.get_selection().get_selected_rows();
 
             const selected = [];
-            cityPathList.forEach(path => {
-                const model = cityTreeView.get_model();
+            pathList.forEach(path => {
+                const model = treeView.get_model();
                 const [, iter] = model.get_iter(path);
-                selected.push(this._countryMap[model.get_value(iter, 0)]);
+                selected.push(valueOf(model.get_value(iter, 0)));
             });
 
-            this._settings.set_value('countries-selected-for-cities', new GLib.Variant('as', selected));
+            this._settings.set_value(settingKey, new GLib.Variant(variantType, selected));
         });
 
-        const cityScroll = new Gtk.ScrolledWindow();
-        cityScroll.set_child(cityTreeView);
-        cityScroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-        cityScroll.set_min_content_height(400);
+        const scroll = new Gtk.ScrolledWindow();
+        scroll.set_child(treeView);
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+        scroll.set_min_content_height(400);
+        grid.attach(scroll, 1, 1, 1, 1);
 
-        cityGrid.attach(cityScroll, 1, 1, 1, 1);
-
-        return {cityGrid, cityTreeView, cityTreeIterMap, cityStore};
+        return {grid, treeView, iterMap, store, settingKey, populatingKey, valueOf};
     }
 
-    _createServersPage() {
-        const serverGrid = new Gtk.Grid({
-            margin_start: 18, margin_top: 10, column_spacing: 12, row_spacing: 12, visible: true
+    // Fills the tree with the country names and selects the rows saved in its setting, without writing the setting back.
+    _populateCountryTree({store, treeView, iterMap, settingKey, populatingKey, valueOf}) {
+        const saved = this._settings.get_value(settingKey).deep_unpack();
+        store.clear();
+        this[populatingKey] = true;
+        this._countryNames.forEach(country => {
+            const iter = store.append(null);
+            store.set(iter, [0], [country]);
+            iterMap[country] = iter;
+            if (saved.includes(valueOf(country)))
+                treeView.get_selection().select_iter(iter);
         });
-
-        const maxServerPerCountryLabel = new Gtk.Label({
-            label: `Max servers per country displayed:`, halign: Gtk.Align.START, visible: true
-        });
-        serverGrid.attach(maxServerPerCountryLabel, 0, 0, 1, 1);
-
-        const maxServerPerCountryInput = new Gtk.SpinButton();
-        maxServerPerCountryInput.set_sensitive(true);
-        maxServerPerCountryInput.set_range(0, 10000);
-        maxServerPerCountryInput.set_value(0);
-        maxServerPerCountryInput.set_increments(1, 2);
-
-        serverGrid.attach(maxServerPerCountryInput, 1, 0, 1, 1);
-
-        this._settings.bind(`number-servers-per-countries`, maxServerPerCountryInput, `value`, Gio.SettingsBindFlags.DEFAULT);
-
-        const serverSelectLabel = new Gtk.Label({
-            label: `Select countries to list in servers tab:\n<small>Hold down CTRL to select multiple</small>`,
-            use_markup: true,
-            halign: Gtk.Align.START,
-            visible: true
-        });
-        serverGrid.attach(serverSelectLabel, 0, 1, 1, 1);
-
-        const serverStore = new Gtk.TreeStore();
-        serverStore.set_column_types([GObject.TYPE_STRING]);
-
-        const serverColumn = new Gtk.TreeViewColumn({
-            title: "Countries",
-            expand: true,
-            min_width: 200
-        });
-
-        const normalRender = new Gtk.CellRendererText();
-        serverColumn.pack_start(normalRender, true);
-        serverColumn.add_attribute(normalRender, "text", 0);
-
-        const serverTreeView = new Gtk.TreeView({
-            model: serverStore
-        });
-        serverTreeView.insert_column(serverColumn, 0);
-        serverTreeView.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE);
-
-        const serverTreeIterMap = {};
-        this._serverPopulating = false;
-
-        serverTreeView.get_selection().connect('changed', (w) => {
-            if (this._serverPopulating) return;
-            const [serverPathList] = serverTreeView.get_selection().get_selected_rows();
-
-            const selected = [];
-            serverPathList.forEach(path => {
-                const model = serverTreeView.get_model();
-                const [, iter] = model.get_iter(path);
-                selected.push(this._countryMapWithID[model.get_value(iter, 0)]);
-            });
-
-            this._settings.set_value('countries-selected-for-servers', new GLib.Variant('ai', selected));
-        });
-
-        this._serverScroll = new Gtk.ScrolledWindow();
-        this._serverScroll.set_child(serverTreeView);
-        this._serverScroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-        this._serverScroll.set_min_content_height(150);
-        this._serverScroll.set_min_content_height(400);
-
-        serverGrid.attach(this._serverScroll, 1, 1, 1, 1);
-
-        return {serverGrid, serverTreeView, serverTreeIterMap, serverStore};
+        this[populatingKey] = false;
     }
 
     _setWindowSize(window) {
@@ -641,21 +505,38 @@ export default class GnordVpnPrefs {
         this._countryMapWithID = {};
         this._countryNames = [];
 
+        const cityTree = this._createCountryTree({
+            maxLabel: `Max cities per country displayed:`,
+            maxSettingKey: `number-cities-per-countries`,
+            selectLabel: `Select countries for cities tab:\n<small>Hold down CTRL to select multiple</small>`,
+            settingKey: 'countries-selected-for-cities',
+            variantType: 'as',
+            populatingKey: '_cityPopulating',
+            valueOf: (country) => this._countryMap[country],
+            rowHeight: 30,
+        });
         const cityPage = new Adw.PreferencesPage();
         cityPage.set_title("Cities");
         cityPage.set_icon_name("document-open-symbolic");
         const cityGroup = new Adw.PreferencesGroup();
-        const {cityGrid, cityTreeView, cityTreeIterMap, cityStore} = this._createCitiesPage();
-        cityGroup.add(cityGrid);
+        cityGroup.add(cityTree.grid);
         cityPage.add(cityGroup);
         window.add(cityPage);
 
+        const serverTree = this._createCountryTree({
+            maxLabel: `Max servers per country displayed:`,
+            maxSettingKey: `number-servers-per-countries`,
+            selectLabel: `Select countries to list in servers tab:\n<small>Hold down CTRL to select multiple</small>`,
+            settingKey: 'countries-selected-for-servers',
+            variantType: 'ai',
+            populatingKey: '_serverPopulating',
+            valueOf: (country) => this._countryMapWithID[country],
+        });
         const serverPage = new Adw.PreferencesPage();
         serverPage.set_title("Servers");
         serverPage.set_icon_name("network-workgroup-symbolic");
         const serverGroup = new Adw.PreferencesGroup();
-        const {serverGrid, serverTreeView, serverTreeIterMap, serverStore} = this._createServersPage();
-        serverGroup.add(serverGrid);
+        serverGroup.add(serverTree.grid);
         serverPage.add(serverGroup);
         window.add(serverPage);
 
@@ -676,34 +557,13 @@ export default class GnordVpnPrefs {
             this._countryMapWithID = countryMapWithID || {};
             this._countryNames = Common.safeObjectKeys(this._countryMap);
 
-            const cityCountries = this._settings.get_value('countries-selected-for-cities').deep_unpack();
-            cityStore.clear();
-            this._cityPopulating = true;
-            this._countryNames.forEach(country => {
-                const iter = cityStore.append(null);
-                cityStore.set(iter, [0], [country]);
-                cityTreeIterMap[country] = iter;
-                if (cityCountries.includes(this._countryMap[country]))
-                    cityTreeView.get_selection().select_iter(iter);
-            });
-            this._cityPopulating = false;
-
-            const serverCountries = this._settings.get_value('countries-selected-for-servers').deep_unpack();
-            serverStore.clear();
-            this._serverPopulating = true;
-            this._countryNames.forEach(country => {
-                const iter = serverStore.append(null);
-                serverStore.set(iter, [0], [country]);
-                serverTreeIterMap[country] = iter;
-                if (serverCountries.includes(this._countryMapWithID[country]))
-                    serverTreeView.get_selection().select_iter(iter);
-            });
-            this._serverPopulating = false;
+            this._populateCountryTree(cityTree);
+            this._populateCountryTree(serverTree);
         }).catch(e => this._log.error('prefs country population failed', e));
 
         const resetManager = new ResetManager();
         resetAll.connect('clicked', () => {
-            resetManager.resetAllSettings(this._settings, this._protoCbox, this._techCbox, cityTreeView, cityTreeIterMap, serverTreeView, serverTreeIterMap);
+            resetManager.resetAllSettings(this._settings, this._protoCbox, this._techCbox, cityTree.treeView, cityTree.iterMap, serverTree.treeView, serverTree.iterMap);
         });
 
         resetConnection.connect('clicked', () => {
