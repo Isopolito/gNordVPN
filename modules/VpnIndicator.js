@@ -59,7 +59,7 @@ export default GObject.registerClass(
         constructor(extension) {
             super();
             this._extension = extension;
-            this._extSettings = extension.getSettings(`org.gnome.shell.extensions.gnordvpn-local`);
+            this._extSettings = extension.getSettings();
             this._refreshTimeoutInSec = this._extSettings.get_value(`refresh-timeout`).unpack();
         }
 

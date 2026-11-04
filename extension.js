@@ -14,7 +14,7 @@ export default class GnordVpnLocal extends Extension {
             return;
         }
         this._isExtensionEnabled = true;
-        this._log.debug('enable() called', {version: this.metadata.version});
+        this._log.debug('enable() called');
 
         this._vpnIndicator = new VpnIndicator(this);
         this._vpnIndicator.enable();
