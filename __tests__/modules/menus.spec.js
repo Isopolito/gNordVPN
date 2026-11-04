@@ -390,6 +390,21 @@ describe('ConnectionMenu', () => {
             await Promise.resolve();
             expect(menu._vpn.getConnectionList).toHaveBeenCalledTimes(2);
         });
+
+        it('disconnects the old rows\' signals once, and never again at destroy()', async () => {
+            const {menu} = createMenu();
+            await menu.tryBuild(true);
+            const row = menu.menu.menu.items.find(i => i.label === 'Albania');
+            row.disconnect = jest.fn();
+            row.icofavBtn.disconnect = jest.fn();
+            menu.rebuild(true);
+            expect(row.disconnect).toHaveBeenCalledTimes(1);
+            expect(row.icofavBtn.disconnect).toHaveBeenCalledTimes(1);
+            expect(menu._destroyMap).toEqual({});
+            menu.destroy();
+            expect(row.disconnect).toHaveBeenCalledTimes(1);
+            expect(row.icofavBtn.disconnect).toHaveBeenCalledTimes(1);
+        });
     });
 });
 

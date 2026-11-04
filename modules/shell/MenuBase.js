@@ -44,6 +44,13 @@ export default class MenuBase {
         this._pendingIdleIds = [];
     }
 
+    // Disconnects the signals of every tracked row and forgets them. Call before the rows are removed from the menu.
+    _releaseRows() {
+        Object.values(this._destroyMap).forEach(({menuItemClickId, menuItem}) =>
+            this._signals.disconnect([menuItemClickId, menuItem.favoritePressId]));
+        this._destroyMap = {};
+    }
+
     // Adds the favorite star to a row and records the row's widgets under `key` for later destruction.
     _addFavoriteButton(key, menuItem, isFavorite, menuItemClickId, onPress) {
         const icofavBtn = this.buildFavIcon(isFavorite);

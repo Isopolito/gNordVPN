@@ -50,7 +50,7 @@ export default class ConnectionMenu extends MenuBase {
     rebuild(running = false) {
         this._isBuilt = false;
         ++this._buildGen;
-        this._destroyMap = {};
+        this._releaseRows();
         this._connectionMenuItems = [];
         this._favConnectionItems = [];
         this._menuSeperator = null;

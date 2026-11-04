@@ -53,13 +53,6 @@ export default class CommonFavorite extends MenuBase {
         this.showHide(this.prevShowHide);
     }
 
-    rebuild() {
-        this._isBuilt = false;
-        this._destroyMap = {};
-        this.favList = {};
-        this.build();
-    }
-
     _buildFavoriteMenuItem(favorite) {
         const menuItem = new PopupMenu.PopupMenuItem(favorite);
         const menuItemClickId = this._signals.connect(menuItem, `activate`, () => {
