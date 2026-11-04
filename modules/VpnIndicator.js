@@ -217,54 +217,47 @@ export default GObject.registerClass(
 
         _updateMenu(status) {
             if (!this._statusPopup || !this._statusLabel) return;
+            if (!this._statusLabel.text) return;
 
-            // Check if objects are still alive before accessing them
-            try {
-                if (!this._statusLabel || !this._statusLabel.text) return;
+            // Set the status text on the menu
+            this._statusLabel.text = status.connectStatus;
 
-                // Set the status text on the menu
-                this._statusLabel.text = status.connectStatus;
+            const actor = this._statusPopup.get_label_actor();
+            if (!actor) return;
+            if (actor.set_text) {
+                actor.set_text(status.connectStatus);
+            }
 
-                const actor = this._statusPopup.get_label_actor();
-                if (!actor) return;
-                if (actor.set_text) {
-                    actor.set_text(status.connectStatus);
+            const menu = this._statusPopup.menu;
+            menu.removeAll();
+
+            let hasItems = false;
+            let statusToDisplay = [`country`, `city`, `currentServer`, `serverIp`, `transfer`, `uptime`];
+            statusToDisplay.forEach(key => {
+                if (status[key]) {
+                    const label = key.replace(/([A-Z]+)/g, ` $1`).replace(/([A-Z][a-z])/g, ` $1`).replace(/^./, e => e.toUpperCase());
+                    const menuItem = new PopupMenu.PopupMenuItem(label + `: ` + status[key]);
+                    menu.addMenuItem(menuItem);
+                    hasItems = true;
                 }
+            })
 
-                const menu = this._statusPopup.menu;
-                menu.removeAll();
+            if (!this._isLoggedIn) {
+                this._statusPopup.hide();
+                this._statusLabel.hide();
+            } else if (hasItems) {
+                this._statusPopup.show();
+                this._statusLabel.hide();
+            } else {
+                this._statusPopup.hide();
+                this._statusLabel.show();
+            }
 
-                let hasItems = false;
-                let statusToDisplay = [`country`, `city`, `currentServer`, `serverIp`, `transfer`, `uptime`];
-                statusToDisplay.forEach(key => {
-                    if (status[key]) {
-                        const label = key.replace(/([A-Z]+)/g, ` $1`).replace(/([A-Z][a-z])/g, ` $1`).replace(/^./, e => e.toUpperCase());
-                        const menuItem = new PopupMenu.PopupMenuItem(label + `: ` + status[key]);
-                        menu.addMenuItem(menuItem);
-                        hasItems = true;
-                    }
-                })
-
-                if (!this._isLoggedIn) {
-                    this._statusPopup.hide();
-                    this._statusLabel.hide();
-                } else if (hasItems) {
-                    this._statusPopup.show();
-                    this._statusLabel.hide();
-                } else {
-                    this._statusPopup.hide();
-                    this._statusLabel.show();
-                }
-
-                if (status.updateMessage) {
-                    this._updateMenuLabel.text = Constants.messages.updateAvailable;
-                    this._updateMenuLabel.visible = true;
-                } else {
-                    this._updateMenuLabel.visible = false;
-                }
-            } catch (e) {
-                // Object was disposed, silently skip this update
-                return;
+            if (status.updateMessage) {
+                this._updateMenuLabel.text = Constants.messages.updateAvailable;
+                this._updateMenuLabel.visible = true;
+            } else {
+                this._updateMenuLabel.visible = false;
             }
 
             // Activate / deactivate menu items
@@ -376,115 +369,106 @@ export default GObject.registerClass(
         }
 
         _openSettings() {
-            try {
-                this._extension.openPreferences();
-            } catch (e) {
-                this._log.error('error opening preferences', e);
-            }
+            this._extension.openPreferences();
         }
 
         async _buildIndicatorMenu() {
             const t = this._log.startTimer();
-            try {
-                this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
-                                this.menu.addMenuItem(this._statusPopup);
-                this._menuOpenChangedId = this.menu.connect(`open-state-changed`, (menu, open) => this._setQuickRefresh(open));
+            this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
+            this.menu.addMenuItem(this._statusPopup);
+            this._menuOpenChangedId = this.menu.connect(`open-state-changed`, (menu, open) => this._setQuickRefresh(open));
 
-                this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
-                this.menu.box.add_child(this._statusLabel);
+            this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
+            this.menu.box.add_child(this._statusLabel);
 
-                // Optionally add `Update` status
-                this._updateMenuLabel = new St.Label({visible: false, style_class: `updatelabel`});
-                this.menu.box.add_child(this._updateMenuLabel);
+            // Optionally add `Update` status
+            this._updateMenuLabel = new St.Label({visible: false, style_class: `updatelabel`});
+            this.menu.box.add_child(this._updateMenuLabel);
 
-                this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-                // Add `Connect` menu item
-                this._connectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.connect);
-                const connectMenuItemClickId = this._connectMenuItem.connect(`activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
-                this._signals.register(connectMenuItemClickId, () => this._connectMenuItem.disconnect(connectMenuItemClickId));
-                this.menu.addMenuItem(this._connectMenuItem);
+            // Add `Connect` menu item
+            this._connectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.connect);
+            const connectMenuItemClickId = this._connectMenuItem.connect(`activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
+            this._signals.register(connectMenuItemClickId, () => this._connectMenuItem.disconnect(connectMenuItemClickId));
+            this.menu.addMenuItem(this._connectMenuItem);
 
-                // Add `Disconnect` menu item
-                this._disconnectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.disconnect);
-                const disconnectMenuItemClickId = this._disconnectMenuItem.connect(`activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
-                this._signals.register(disconnectMenuItemClickId, () => this._disconnectMenuItem.disconnect(disconnectMenuItemClickId));
-                this.menu.addMenuItem(this._disconnectMenuItem);
+            // Add `Disconnect` menu item
+            this._disconnectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.disconnect);
+            const disconnectMenuItemClickId = this._disconnectMenuItem.connect(`activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
+            this._signals.register(disconnectMenuItemClickId, () => this._disconnectMenuItem.disconnect(disconnectMenuItemClickId));
+            this.menu.addMenuItem(this._disconnectMenuItem);
 
-                this._commonFavorite.build();
-                this.menu.addMenuItem(this._commonFavorite.menu);
+            this._commonFavorite.build();
+            this.menu.addMenuItem(this._commonFavorite.menu);
 
-                if (this._extSettings.get_boolean(`commonfavorite`)) this._commonFavorite.menu.show();
-                else this._commonFavorite.menu.hide();
+            if (this._extSettings.get_boolean(`commonfavorite`)) this._commonFavorite.menu.show();
+            else this._commonFavorite.menu.hide();
 
-                // running=false: nordvpnd state not yet known; menus populate on first _throttledMenuBuild.
-                this._countryMenu.tryBuild(false).catch(e => this._log.error('countryMenu build failed', e));
-                this.menu.addMenuItem(this._countryMenu.menu);
+            // running=false: nordvpnd state not yet known; menus populate on first _throttledMenuBuild.
+            this._countryMenu.tryBuild(false).catch(e => this._log.error('countryMenu build failed', e));
+            this.menu.addMenuItem(this._countryMenu.menu);
 
-                this._cityMenu.tryBuild(false).catch(e => this._log.error('cityMenu build failed', e));
-                this.menu.addMenuItem(this._cityMenu.menu);
+            this._cityMenu.tryBuild(false).catch(e => this._log.error('cityMenu build failed', e));
+            this.menu.addMenuItem(this._cityMenu.menu);
 
-                this._serverMenu.tryBuild(false).catch(e => this._log.error('serverMenu build failed', e));
-                this.menu.addMenuItem(this._serverMenu.menu);
+            this._serverMenu.tryBuild(false).catch(e => this._log.error('serverMenu build failed', e));
+            this.menu.addMenuItem(this._serverMenu.menu);
 
-                this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-                // Add `Settings` menu item
-                const settingsMenuItem = new PopupMenu.PopupMenuItem(`Settings`);
-                this.menu.addMenuItem(settingsMenuItem);
-                settingsMenuItem.connect(`activate`, this._openSettings.bind(this));
+            // Add `Settings` menu item
+            const settingsMenuItem = new PopupMenu.PopupMenuItem(`Settings`);
+            this.menu.addMenuItem(settingsMenuItem);
+            settingsMenuItem.connect(`activate`, this._openSettings.bind(this));
 
-                // Add `Login` menu item
-                this._loginMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.login);
-                const loginMenuItemClickId = this._loginMenuItem.connect(`activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
-                this._signals.register(loginMenuItemClickId, () => this._loginMenuItem.disconnect(loginMenuItemClickId));
-                this.menu.addMenuItem(this._loginMenuItem);
+            // Add `Login` menu item
+            this._loginMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.login);
+            const loginMenuItemClickId = this._loginMenuItem.connect(`activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
+            this._signals.register(loginMenuItemClickId, () => this._loginMenuItem.disconnect(loginMenuItemClickId));
+            this.menu.addMenuItem(this._loginMenuItem);
 
-                // Add `Logout` menu item
-                this._logoutMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.logout);
-                const logoutMenuItemClickId = this._logoutMenuItem.connect(`activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
-                this._signals.register(logoutMenuItemClickId, () => this._logoutMenuItem.disconnect(logoutMenuItemClickId));
-                this.menu.addMenuItem(this._logoutMenuItem);
+            // Add `Logout` menu item
+            this._logoutMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.logout);
+            const logoutMenuItemClickId = this._logoutMenuItem.connect(`activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
+            this._signals.register(logoutMenuItemClickId, () => this._logoutMenuItem.disconnect(logoutMenuItemClickId));
+            this.menu.addMenuItem(this._logoutMenuItem);
 
-                this._panelIcon.build();
-                this.add_child(this._panelIcon.button());
+            this._panelIcon.build();
+            this.add_child(this._panelIcon.button());
 
-                this._panelIcon.button().connect(`button-press-event`, (actor, event) => {
-                    //Only checking login state when clicking on menu
-                    //Cannot check periodically because:
-                    //If checking with `nordvpn account` it fetches from a server that limit request
-                    //If checking with `nordvpn login` it generate a new url, preventing the use from login in
-                    // Run checkLogin on idle so it doesn't block the menu from opening (~1s sync call).
-                    // _pendingLoginCheck ensures only one idle is queued even on rapid clicks.
-                    if (!this._pendingLoginCheck) {
-                        this._pendingLoginCheck = true;
-                        this._vpn.checkLogin().then(loggedIn => {
-                            this._pendingLoginCheck = false;
-                            if (this._isDestroyed) return;
-                            this._isLoggedIn = loggedIn;
-                            this._refresh();
-                        }).catch(e => {
-                            this._pendingLoginCheck = false;
-                            this._log.error('checkLogin failed', e);
-                        });
-                    }
-                });
-
-                // Async initial login check — non-blocking.
-                // Only trigger a follow-up refresh if the login state changed.
-                this._vpn.checkLogin().then(loggedIn => {
-                    if (this._isDestroyed) return;
-                    const wasLoggedIn = this._isLoggedIn;
-                    this._isLoggedIn = loggedIn;
-                    if (this._isLoggedIn !== wasLoggedIn) {
+            this._panelIcon.button().connect(`button-press-event`, (actor, event) => {
+                //Only checking login state when clicking on menu
+                //Cannot check periodically because:
+                //If checking with `nordvpn account` it fetches from a server that limit request
+                //If checking with `nordvpn login` it generate a new url, preventing the use from login in
+                // Run checkLogin on idle so it doesn't block the menu from opening (~1s sync call).
+                // _pendingLoginCheck ensures only one idle is queued even on rapid clicks.
+                if (!this._pendingLoginCheck) {
+                    this._pendingLoginCheck = true;
+                    this._vpn.checkLogin().then(loggedIn => {
+                        this._pendingLoginCheck = false;
+                        if (this._isDestroyed) return;
+                        this._isLoggedIn = loggedIn;
                         this._refresh();
-                    }
-                }).catch(e => this._log.error('initial checkLogin failed', e));
-                this._log.endTimer(t, 'SPAN', {operation: '_buildIndicatorMenu'});
-            } catch (e) {
-                this._log.endTimer(t, 'SPAN', {operation: '_buildIndicatorMenu', error: e?.message});
-                this._log.error('unable to build indicator menu', e);
-            }
+                    }).catch(e => {
+                        this._pendingLoginCheck = false;
+                        this._log.error('checkLogin failed', e);
+                    });
+                }
+            });
+
+            // Async initial login check — non-blocking.
+            // Only trigger a follow-up refresh if the login state changed.
+            this._vpn.checkLogin().then(loggedIn => {
+                if (this._isDestroyed) return;
+                const wasLoggedIn = this._isLoggedIn;
+                this._isLoggedIn = loggedIn;
+                if (this._isLoggedIn !== wasLoggedIn) {
+                    this._refresh();
+                }
+            }).catch(e => this._log.error('initial checkLogin failed', e));
+            this._log.endTimer(t, 'SPAN', {operation: '_buildIndicatorMenu'});
         }
 
         _setTimeout(timeoutDuration) {
@@ -504,34 +488,30 @@ export default GObject.registerClass(
         enable() {
             const t = this._log.startTimer();
             this._log.debug('enable() called');
-            try {
-                this._stateManager = new StateManager();
-                this._moveIndicator();
-                this._connectChanged();
-                this._vpn = new Vpn(this._extSettings);
-                this._signals = new Signals();
-                this._commonFavorite = new CommonFavorite(this._overrideRefresh.bind(this), this._extSettings);
-                this._countryMenu = new ConnectionMenu(`Countries`, `countries`, Constants.favorites.favoriteCountries, this._overrideRefresh.bind(this), this._extSettings);
-                this._cityMenu = new ConnectionMenu(`Cities`, `cities`, Constants.favorites.favoriteCities, this._overrideRefresh.bind(this), this._extSettings);
-                this._serverMenu = new ConnectionMenu(`Servers`, `servers`, Constants.favorites.favoriteServers, this._overrideRefresh.bind(this), this._extSettings);
-                this._panelIcon = new PanelIcon(this._extSettings);
+            this._stateManager = new StateManager();
+            this._moveIndicator();
+            this._connectChanged();
+            this._vpn = new Vpn(this._extSettings);
+            this._signals = new Signals();
+            this._commonFavorite = new CommonFavorite(this._overrideRefresh.bind(this), this._extSettings);
+            this._countryMenu = new ConnectionMenu(`Countries`, `countries`, Constants.favorites.favoriteCountries, this._overrideRefresh.bind(this), this._extSettings);
+            this._cityMenu = new ConnectionMenu(`Cities`, `cities`, Constants.favorites.favoriteCities, this._overrideRefresh.bind(this), this._extSettings);
+            this._serverMenu = new ConnectionMenu(`Servers`, `servers`, Constants.favorites.favoriteServers, this._overrideRefresh.bind(this), this._extSettings);
+            this._panelIcon = new PanelIcon(this._extSettings);
 
-                this._buildIndicatorMenu().then(async () => {
-                    if (this._isDestroyed) return;
-                    // Startup is read-only: build UI, fetch status, schedule refresh.
-                    // applySettingsToNord() is intentionally omitted here to avoid
-                    // blocking writes during login/unlock (see issue #102).
-                    // Settings are applied only from the prefs Apply button.
-                    this._log.debug('enable() startup: read-only path, skipping applySettingsToNord');
-                    // Sync GSettings from NordVPN so the prefs UI reflects actual settings.
-                    this._vpn.setSettingsFromNord().catch(e => this._log.error('setSettingsFromNord failed', e));
-                    this._refresh().then(() => {
-                        this._log.endTimer(t, 'SPAN', {operation: 'enable'});
-                    }).catch(e => this._log.error('unable to refresh', e));
-                }).catch(e => this._log.error('unable to build indicator menu', e));
-            } catch (e) {
-                this._log.error('enable() failed', e);
-            }
+            this._buildIndicatorMenu().then(async () => {
+                if (this._isDestroyed) return;
+                // Startup is read-only: build UI, fetch status, schedule refresh.
+                // applySettingsToNord() is intentionally omitted here to avoid
+                // blocking writes during login/unlock (see issue #102).
+                // Settings are applied only from the prefs Apply button.
+                this._log.debug('enable() startup: read-only path, skipping applySettingsToNord');
+                // Sync GSettings from NordVPN so the prefs UI reflects actual settings.
+                this._vpn.setSettingsFromNord().catch(e => this._log.error('setSettingsFromNord failed', e));
+                this._refresh().then(() => {
+                    this._log.endTimer(t, 'SPAN', {operation: 'enable'});
+                }).catch(e => this._log.error('unable to refresh', e));
+            }).catch(e => this._log.error('unable to build indicator menu', e));
         }
 
         disable() {

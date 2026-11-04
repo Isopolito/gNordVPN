@@ -351,6 +351,15 @@ describe('VpnIndicator._refresh', () => {
             expect(indicator._panelIcon.update).not.toHaveBeenCalled();
         });
 
+        it('keeps polling with the retry delay when updating the menu throws', async () => {
+            const indicator = createIndicator({status: makeStatus(Constants.states.CONNECTED)});
+            indicator._statusPopup = {get_label_actor: () => { throw new Error('widget gone'); }};
+            indicator._statusLabel = {text: 'Checking...'};
+            await indicator._refresh();
+            expect(indicator._refreshBackoffSec).toBe(5);
+            expect(lastDelay()).toBe(REFRESH_TIMEOUT + 5);
+        });
+
         it('resets the backoff after a successful refresh', async () => {
             const indicator = createIndicator();
             indicator._refreshBackoffSec = 40;

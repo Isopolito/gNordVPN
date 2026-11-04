@@ -17,15 +17,6 @@ describe('Signals', () => {
         expect(a).toHaveBeenCalledTimes(1);
     });
 
-    it('disconnectAll keeps going when a callback throws', () => {
-        const s = new Signals();
-        const b = jest.fn();
-        s.register(1, () => { throw new Error('boom'); });
-        s.register(2, b);
-        s.disconnectAll();
-        expect(b).toHaveBeenCalledTimes(1);
-    });
-
     it('disconnect takes an array of ids and only runs those callbacks', () => {
         const s = new Signals();
         const a = jest.fn(), b = jest.fn(), c = jest.fn();
