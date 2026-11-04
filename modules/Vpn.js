@@ -5,6 +5,7 @@ import Soup from 'gi://Soup';
 import ProcCom from './ProcCom.js';
 import VpnUtils from './VpnUtils.js';
 import Logger from './Logger.js';
+import {isCancelled} from './common.js';
 
 const CMD_VPNSTATUS = `nordvpn status`;
 const CMD_VPNACCOUNT = `nordvpn account`;
@@ -19,7 +20,7 @@ const CMD_DISCONNECT = `nordvpn d`;
 const CMD_LOGIN = `nordvpn login`;
 const CMD_LOGOUT = `nordvpn logout`;
 
-// Shared across all Vpn instances (panel + prefs) to prevent concurrent login subprocesses
+// Shared by every Vpn instance in this process, so a login started before a disable and enable is still the only one.
 let _loginInFlight = false;
 
 export default class Vpn {
@@ -31,6 +32,8 @@ export default class Vpn {
         this._session = Soup.Session.new();
         this._soupVersion = Soup.get_major_version();
         this._lastConnectedAt = 0;
+        // Cancels read-only polls and lookups. State-changing commands never use it, so they finish after destroy().
+        this._cancellable = new Gio.Cancellable();
 
         if (this._soupVersion >= 3) {
             Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
@@ -38,6 +41,11 @@ export default class Vpn {
             Gio._promisify(Soup.Session.prototype, 'send_async');
             Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async');
         }
+    }
+
+    destroy() {
+        this._cancellable.cancel();
+        this._session.abort();
     }
 
     async _httpGet(url) {
@@ -61,7 +69,7 @@ export default class Vpn {
             result = JSON.parse(new TextDecoder('utf-8').decode(this._concatBytes(chunks)));
             this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
         } else {
-            const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null);
+            const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, this._cancellable);
             if (msg.get_status() === Soup.Status.OK) {
                 result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
                 this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
@@ -86,11 +94,12 @@ export default class Vpn {
     }
 
     // A successful (exit 0) `nordvpn status` means nordvpnd is running.
-    async _isDaemonRunning() {
+    async _isDaemonRunning(cancellable = null) {
         try {
-            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
+            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS, cancellable);
             return true;
         } catch (e) {
+            if (isCancelled(e)) throw e;
             this._log.debug('nordvpnd not running', {error: String(e)});
             return false;
         }
@@ -107,12 +116,12 @@ export default class Vpn {
 
     async _execAsyncIfRunning(command, running) {
         if (!running) return ``;
-        return this._procCom.execCommunicateAsync(command);
+        return this._procCom.execCommunicateAsync(command, this._cancellable);
     }
 
     async setSettingsFromNord() {
         // Use async status check to determine if nordvpnd is running — avoids blocking sync call.
-        const running = await this._isDaemonRunning();
+        const running = await this._isDaemonRunning(this._cancellable);
         const standardOut = await this._execAsyncIfRunning(CMD_FETCH_SETTINGS, running);
         if (!standardOut) return;
         for (const line of standardOut.split(`\n`)) {
@@ -172,8 +181,9 @@ export default class Vpn {
     async getAccount() {
         let standardOut;
         try {
-            standardOut = await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT);
+            standardOut = await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT, this._cancellable);
         } catch (e) {
+            if (isCancelled(e)) throw e;
             // Non-zero exit or spawn failure — degrade gracefully with empty account info
             return {emailAddress: undefined, vpnService: undefined};
         }
@@ -191,14 +201,14 @@ export default class Vpn {
 
     async checkLogin() {
         try {
-            await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT);
+            await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT, this._cancellable);
             this._log.debug('checkLogin', {loggedIn: true});
             return true;
         } catch (e) {
             // execCommunicateAsync throws new Error(stderr) when nordvpn exits non-zero
             // (not logged in). GIO spawn failures throw a GLib.Error with a numeric .code
             // property — re-throw those so callers can surface real infrastructure errors.
-            if (e instanceof Error && e.code === undefined) {
+            if (!isCancelled(e) && e instanceof Error && e.code === undefined) {
                 this._log.debug('checkLogin', {loggedIn: false});
                 return false;
             }
@@ -213,7 +223,7 @@ export default class Vpn {
         let running = false;
 
         try {
-            const standardOut = await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
+            const standardOut = await this._procCom.execCommunicateAsync(CMD_VPNSTATUS, this._cancellable);
             // A successful (exit 0) response means nordvpnd is running.
             running = true;
             if (standardOut) {
@@ -245,7 +255,7 @@ export default class Vpn {
             // (i.e. nordvpnd is not running). Any other error type (e.g. Gio.IOError from
             // a spawn failure) means something is genuinely broken — re-throw so _refresh()
             // can engage its exponential backoff instead of hammering a failing subprocess.
-            if (!(e instanceof Error)) throw e;
+            if (isCancelled(e) || !(e instanceof Error)) throw e;
             this._log.debug('getStatus: nordvpnd not running or exited non-zero', {error: String(e)});
         }
 
@@ -331,6 +341,7 @@ export default class Vpn {
                     return acc;
                 }, {});
             } catch (e) {
+                if (isCancelled(e)) throw e;
                 return null;
             }
 
@@ -410,6 +421,7 @@ export default class Vpn {
                 }
             }
         } catch (e) {
+            if (isCancelled(e)) throw e;
             this._log.error('error getting servers', e);
             return null;
         }

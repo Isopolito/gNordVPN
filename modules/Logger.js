@@ -1,5 +1,7 @@
 import GLib from 'gi://GLib';
 
+import {isCancelled} from './common.js';
+
 // Debug and timing lines are off unless the debug-logging setting is on. Warnings and errors always log.
 let debugEnabled = false;
 
@@ -27,6 +29,11 @@ export default class Logger {
     }
 
     error(msg, e = null, fields = {}) {
+        // A cancelled call is the normal result of teardown, not an error.
+        if (isCancelled(e)) {
+            this.debug(`${msg}: cancelled`);
+            return;
+        }
         const payload = {
             ...fields,
             ...(e?.message ? {error: e.message} : {}),
