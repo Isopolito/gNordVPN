@@ -69,6 +69,20 @@ Contributions welcome! If you find any issues or think of any cool features, che
 
 Run `npm ci && npm test`. Tests use Jest; `gi://...` and `resource:///...` imports are mapped by `moduleNameMapper` in `package.json` to stubs under `__mocks__/gi` and `__mocks__/resource`, so add a stub there when a module imports a new GNOME library. `deploy_local.sh` installs into your live GNOME session, so run it yourself; it is not part of the tests.
 
+### Linting
+
+`npm run lint` runs ESLint over `extension.js`, `prefs.js` and `modules/`. It must pass; CI runs it with the tests.
+
+### Debug logging
+
+The extension only logs warnings and errors. To see debug and timing lines (what `debug-logs.sh` reads), turn on the `debug-logging` setting:
+
+`gsettings --schemadir ~/.local/share/gnome-shell/extensions/gnordvpn-local@isopolito/schemas set org.gnome.shell.extensions.gnordvpn-local debug-logging true`
+
+### Code layout
+
+`modules/shell/` runs in the GNOME Shell process, `modules/prefs/` in the preferences window, and `modules/` holds code both use. The processes cannot share GUI libraries, so shell code never imports Gtk, Gdk or Adw, and preferences code never imports St, Clutter, Meta or Shell. A test enforces this.
+
 ## Thanks
 
 Thanks [TheRobVK](https://github.com/ThatRobVK) for creating the original version of this extension. Also thanks to all who have contributed, it's much appreciated!
