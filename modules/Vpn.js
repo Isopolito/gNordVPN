@@ -5,6 +5,7 @@ import Soup from 'gi://Soup';
 import ProcCom from './ProcCom.js';
 import VpnUtils from './VpnUtils.js';
 import Logger from './Logger.js';
+import {isCancelled} from './common.js';
 
 const CMD_VPNSTATUS = `nordvpn status`;
 const CMD_VPNACCOUNT = `nordvpn account`;
@@ -19,93 +20,75 @@ const CMD_DISCONNECT = `nordvpn d`;
 const CMD_LOGIN = `nordvpn login`;
 const CMD_LOGOUT = `nordvpn logout`;
 
-// Shared across all Vpn instances (panel + prefs) to prevent concurrent login subprocesses
+Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
+
+// Shared by every Vpn instance in this process, so a login started before a disable and enable is still the only one.
 let _loginInFlight = false;
 
 export default class Vpn {
     constructor(settings) {
         this._log = new Logger('Vpn');
-        this._settings = settings
+        this._settings = settings;
         this._procCom = new ProcCom();
         this._vpnUtils = new VpnUtils();
         this._session = Soup.Session.new();
-        this._soupVersion = Soup.get_major_version();
         this._lastConnectedAt = 0;
+        // Cancels read-only polls and lookups. State-changing commands never use it, so they finish after destroy().
+        this._cancellable = new Gio.Cancellable();
+    }
 
-        if (this._soupVersion >= 3) {
-            Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
-        } else if (this._soupVersion >= 2) {
-            Gio._promisify(Soup.Session.prototype, 'send_async');
-            Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async');
-        }
+    destroy() {
+        this._cancellable.cancel();
+        this._session.abort();
     }
 
     async _httpGet(url) {
         const domain = url.replace(/^https?:\/\//, '').split('/')[0];
         const t = this._log.startTimer();
-        try {
-            const msg = Soup.Message.new(`GET`, url);
-            let result;
-            if (this._soupVersion < 2) {
-                // Soup < 2: keep sync
-                this._session.send(msg, null);
-                result = JSON.parse(this._vpnUtils.getString(msg.response_body.data));
-                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: true, success: true});
-            } else if (this._soupVersion >= 2 && this._soupVersion < 3) {
-                const inputStream = await this._session.send_async(msg, GLib.PRIORITY_DEFAULT, null);
-                const chunks = [];
-                while (true) {
-                    const chunk = await inputStream.read_bytes_async(4096, GLib.PRIORITY_DEFAULT, null);
-                    if (chunk.get_size() === 0) break;
-                    chunks.push(chunk);
-                }
-                result = JSON.parse(new TextDecoder('utf-8').decode(this._concatBytes(chunks)));
-                this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
-            } else {
-                const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null);
-                if (msg.get_status() === Soup.Status.OK) {
-                    result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
-                    this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
-                } else {
-                    this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
-                    this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
-                    return null;
-                }
-            }
-            return result;
-        } catch (e) {
+        const msg = Soup.Message.new(`GET`, url);
+        const bytes = await this._session.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, this._cancellable);
+        if (msg.get_status() !== Soup.Status.OK) {
             this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: false});
-            throw e;
+            this._log.error(`gNordVpn: error (${msg.get_reason_phrase()}) calling URL ${url}`);
+            return null;
+        }
+        const result = JSON.parse(new TextDecoder('utf-8').decode(bytes.get_data()));
+        this._log.endTimer(t, 'CALL', {cmd: domain, blocking: false, success: true});
+        return result;
+    }
+
+    // A successful (exit 0) `nordvpn status` means nordvpnd is running.
+    async _isDaemonRunning(cancellable = null) {
+        try {
+            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS, cancellable);
+            return true;
+        } catch (e) {
+            if (isCancelled(e)) throw e;
+            this._log.debug('nordvpnd not running', {error: String(e)});
+            return false;
         }
     }
 
-    _concatBytes(chunks) {
-        const totalLen = chunks.reduce((acc, c) => acc + c.get_size(), 0);
-        const buf = new Uint8Array(totalLen);
-        let offset = 0;
-        for (const chunk of chunks) {
-            buf.set(chunk.get_data(), offset);
-            offset += chunk.get_size();
+    // Runs a command whose failure must not stop the caller: some settings are rejected when conditionally invalid.
+    async _execBestEffort(cmd) {
+        try {
+            await this._procCom.execCommunicateAsync(cmd);
+        } catch (e) {
+            this._log.debug('best-effort command failed', {cmd, error: String(e)});
         }
-        return buf;
     }
 
     async _execAsyncIfRunning(command, running) {
         if (!running) return ``;
-        return this._procCom.execCommunicateAsync(command);
+        return this._procCom.execCommunicateAsync(command, this._cancellable);
     }
 
     async setSettingsFromNord() {
-        // Use async status check to determine if nordvpnd is running — avoids blocking sync call.
-        let running = false;
-        try {
-            await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
-            running = true;
-        } catch (e) { this._log.debug('setSettingsFromNord: nordvpnd not running', {error: String(e)}); }
+        const running = await this._isDaemonRunning(this._cancellable);
         const standardOut = await this._execAsyncIfRunning(CMD_FETCH_SETTINGS, running);
         if (!standardOut) return;
         for (const line of standardOut.split(`\n`)) {
-            let parts = line.split(`:`);
+            const parts = line.split(`:`);
             const settingName = this._vpnUtils.resolveSettingsKey(parts[0]);
             const settingValue = this._vpnUtils.resolveSettingsValue(parts[1]);
             if (!settingName || settingValue === undefined) continue;
@@ -132,44 +115,33 @@ export default class Vpn {
         const protocol = this._settings.get_string(`protocol`);
         const technology = this._settings.get_string(`technology`);
 
-        let running = false;
-        try { await this._procCom.execCommunicateAsync(CMD_VPNSTATUS); running = true; } catch {}
-        if (!running) return;
+        if (!await this._isDaemonRunning()) return;
 
-        // Apply each setting independently — some may be rejected when conditionally
-        // invalid (e.g., obfuscate is unsupported with NordLynx). Best-effort matches
-        // the original sync behavior where non-zero exits were silently ignored.
-        const applySetting = async (cmd) => {
-            try { await this._procCom.execCommunicateAsync(cmd); }
-            catch (e) { this._log.debug('applySettingsToNord: setting rejected', {cmd, error: String(e)}); }
-        };
-
+        // Each setting is applied independently: some are rejected when conditionally invalid
+        // (e.g., obfuscate is unsupported with NordLynx).
         const t = this._log.startTimer();
-        await applySetting(`${CMD_SETTINGS} firewall ${firewall}`);
-        await applySetting(`${CMD_SETTINGS} analytics ${analytics}`);
-        await applySetting(`${CMD_SETTINGS} autoconnect ${autoconnect}`);
-        await applySetting(`${CMD_SETTINGS} cybersec ${cybersec}`);
-        await applySetting(`${CMD_SETTINGS} killswitch ${killswitch}`);
-        await applySetting(`${CMD_SETTINGS} obfuscate ${obfuscate}`);
-        await applySetting(`${CMD_SETTINGS} ipv6 ${ipv6}`);
-        await applySetting(`${CMD_SETTINGS} notify ${notify}`);
-        await applySetting(`${CMD_SETTINGS} protocol ${protocol}`);
-        await applySetting(`${CMD_SETTINGS} technology ${technology}`);
+        await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
+        await this._execBestEffort(`${CMD_SETTINGS} analytics ${analytics}`);
+        await this._execBestEffort(`${CMD_SETTINGS} autoconnect ${autoconnect}`);
+        await this._execBestEffort(`${CMD_SETTINGS} cybersec ${cybersec}`);
+        await this._execBestEffort(`${CMD_SETTINGS} killswitch ${killswitch}`);
+        await this._execBestEffort(`${CMD_SETTINGS} obfuscate ${obfuscate}`);
+        await this._execBestEffort(`${CMD_SETTINGS} ipv6 ${ipv6}`);
+        await this._execBestEffort(`${CMD_SETTINGS} notify ${notify}`);
+        await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
+        await this._execBestEffort(`${CMD_SETTINGS} technology ${technology}`);
 
-        // TODO: Why is this 2nd call to firewall needed to make things work?
-        await applySetting(`${CMD_SETTINGS} firewall ${firewall}`);
+        // Firewall is set a second time because the settings only took effect with the repeat; the reason has not been found.
+        await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
         this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 11});
-    }
-
-    async setToDefaults() {
-        return this._procCom.execCommunicateAsync(`${CMD_SETTINGS} defaults`);
     }
 
     async getAccount() {
         let standardOut;
         try {
-            standardOut = await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT);
+            standardOut = await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT, this._cancellable);
         } catch (e) {
+            if (isCancelled(e)) throw e;
             // Non-zero exit or spawn failure — degrade gracefully with empty account info
             return {emailAddress: undefined, vpnService: undefined};
         }
@@ -179,7 +151,7 @@ export default class Vpn {
         let vpnService;
         if (allAccountMessages.length > 2 && allAccountMessages[1].includes(`Email`)) {
             emailAddress = allAccountMessages[1].replace(`Email Address: `, ``);
-            vpnService = allAccountMessages[2].replace(`VPN Service: `, ``)
+            vpnService = allAccountMessages[2].replace(`VPN Service: `, ``);
         }
 
         return {emailAddress, vpnService};
@@ -187,14 +159,14 @@ export default class Vpn {
 
     async checkLogin() {
         try {
-            await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT);
+            await this._procCom.execCommunicateAsync(CMD_VPNACCOUNT, this._cancellable);
             this._log.debug('checkLogin', {loggedIn: true});
             return true;
         } catch (e) {
             // execCommunicateAsync throws new Error(stderr) when nordvpn exits non-zero
             // (not logged in). GIO spawn failures throw a GLib.Error with a numeric .code
             // property — re-throw those so callers can surface real infrastructure errors.
-            if (e instanceof Error && e.code === undefined) {
+            if (!isCancelled(e) && e instanceof Error && e.code === undefined) {
                 this._log.debug('checkLogin', {loggedIn: false});
                 return false;
             }
@@ -209,7 +181,7 @@ export default class Vpn {
         let running = false;
 
         try {
-            const standardOut = await this._procCom.execCommunicateAsync(CMD_VPNSTATUS);
+            const standardOut = await this._procCom.execCommunicateAsync(CMD_VPNSTATUS, this._cancellable);
             // A successful (exit 0) response means nordvpnd is running.
             running = true;
             if (standardOut) {
@@ -229,10 +201,10 @@ export default class Vpn {
                     else if (msg.includes(`new version`)) updateMessage = msg;
                     else if (msg.includes(`Current server:`)) {
                         serverNumber = msg.match(/\d+/);
-                        currentServer = msg.replace(`Current server: `, ``)
+                        currentServer = msg.replace(`Current server: `, ``);
                     } else if (msg.includes(`Hostname:`)) {
                         serverNumber = msg.match(/\d+/);
-                        currentServer = msg.replace(`Hostname: `, ``)
+                        currentServer = msg.replace(`Hostname: `, ``);
                     }
                 }
             }
@@ -241,8 +213,8 @@ export default class Vpn {
             // (i.e. nordvpnd is not running). Any other error type (e.g. Gio.IOError from
             // a spawn failure) means something is genuinely broken — re-throw so _refresh()
             // can engage its exponential backoff instead of hammering a failing subprocess.
-            if (!(e instanceof Error)) throw e;
-            this._log.warn('getStatus: nordvpnd not running or exited non-zero', {error: String(e)});
+            if (isCancelled(e) || !(e instanceof Error)) throw e;
+            this._log.debug('getStatus: nordvpnd not running or exited non-zero', {error: String(e)});
         }
 
         const resolved = connectStatus || 'N/A';
@@ -261,7 +233,7 @@ export default class Vpn {
             currentProtocol: currentProtocol || 'N/A',
             transfer: transfer || 'N/A',
             uptime: uptime || 'N/A'
-        }
+        };
     }
 
     isConnectThrottled() {
@@ -277,8 +249,8 @@ export default class Vpn {
         if (query) {
             // Best-effort: autoconnect updates may fail for some query types but
             // nordvpn c <query> can still succeed, so don't abort on these errors.
-            try { await this._procCom.execCommunicateAsync(CMD_AUTOCONNECT_OFF); } catch (e) { this._log.debug('autoconnect off failed', {error: String(e)}); }
-            try { await this._procCom.execCommunicateAsync(`${CMD_AUTOCONNECT_ON} ${query}`); } catch (e) { this._log.debug('autoconnect on failed', {error: String(e)}); }
+            await this._execBestEffort(CMD_AUTOCONNECT_OFF);
+            await this._execBestEffort(`${CMD_AUTOCONNECT_ON} ${query}`);
             return this._procCom.execCommunicateAsync(`${CMD_CONNECT} ${query}`);
         } else {
             return this._procCom.execCommunicateAsync(CMD_CONNECT);
@@ -320,13 +292,14 @@ export default class Vpn {
         if (withId) {
             let countriesMap;
             try {
-                let data = await this._httpGet(`https://api.nordvpn.com/v1/servers/countries`);
+                const data = await this._httpGet(`https://api.nordvpn.com/v1/servers/countries`);
                 if (!data) return null;
                 countriesMap = data.reduce((acc, v) => {
                     acc[v['name']] = v['id'];
                     return acc;
                 }, {});
             } catch (e) {
+                if (isCancelled(e)) throw e;
                 return null;
             }
 
@@ -336,22 +309,22 @@ export default class Vpn {
         const standardOut = await this._execAsyncIfRunning(CMD_COUNTRIES, running);
         const countries = this._vpnUtils.processCityCountryOutput(standardOut);
 
-        let processedCountries = {};
-        for (let country of countries) {
+        const processedCountries = {};
+        for (const country of countries) {
             processedCountries[country.replace(/_/g, ` `)] = country;
         }
 
-        // If the list of countries from NordVpn cli is less then 5 there's most likely a problem with the connection.
+        // If the list of countries from NordVpn cli is fewer than 5 there's most likely a problem with the connection.
         // Better to return nothing so calling code can handle appropriately rather than a list of error message words
         if (Object.keys(processedCountries).length < 5) return null;
         return processedCountries;
     }
 
     async getCities(running = true) {
-        let citiesMax = this._settings.get_value('number-cities-per-countries').unpack() - 1;
-        let citiesSaved = this._settings.get_value('countries-selected-for-cities').deep_unpack();
+        const citiesMax = this._settings.get_value('number-cities-per-countries').unpack() - 1;
+        const citiesSaved = this._settings.get_value('countries-selected-for-cities').deep_unpack();
 
-        let processedCities = {};
+        const processedCities = {};
 
         for (let i = 0; i < citiesSaved.length; i++) {
             const standardOut = await this._execAsyncIfRunning(`${CMD_CITIES} ${citiesSaved[i]}`, running);
@@ -359,8 +332,8 @@ export default class Vpn {
 
             for (let j = 0; j < cities.length; j++) {
                 if (j > citiesMax) break;
-                let c = (citiesSaved[i] + `, ` + cities[j].replace(`,`, ``)).replace(/_/g, ` `);
-                let d = cities[j].replace(`,`, ``);
+                const c = (citiesSaved[i] + `, ` + cities[j].replace(`,`, ``)).replace(/_/g, ` `);
+                const d = cities[j].replace(`,`, ``);
                 processedCities[c] = d;
             }
         }
@@ -372,17 +345,17 @@ export default class Vpn {
         // getServers only uses the HTTP API — it works regardless of daemon state.
         // Using nordvpn undocumented public api since the app does not give that information
         // Useful source: https://sleeplessbeastie.eu/2019/02/18/how-to-use-public-nordvpn-api/
-        let countriesMax = this._settings.get_value('number-servers-per-countries').unpack();
-        let countriesSaved = this._settings.get_value('countries-selected-for-servers').deep_unpack();
+        const countriesMax = this._settings.get_value('number-servers-per-countries').unpack();
+        const countriesSaved = this._settings.get_value('countries-selected-for-servers').deep_unpack();
 
-        let url = `https://api.nordvpn.com/v1/servers/recommendations?limit=` + countriesMax
-        let technology = this._settings.get_string(`technology`);
+        let url = `https://api.nordvpn.com/v1/servers/recommendations?limit=` + countriesMax;
+        const technology = this._settings.get_string(`technology`);
         if (technology === 'NORDLYNX') {
             url += `&filters[servers_technologies][identifier]=wireguard_udp`;
 
         } else if (technology === 'OPENVPN') {
-            let obfuscate = this._settings.get_boolean(`obfuscate`);
-            let protocol = this._settings.get_string(`protocol`);
+            const obfuscate = this._settings.get_boolean(`obfuscate`);
+            const protocol = this._settings.get_string(`protocol`);
 
             if (protocol === `UDP`) {
                 if (obfuscate) url += `&filters[servers_technologies][identifier]=openvpn_xor_udp`;
@@ -395,10 +368,10 @@ export default class Vpn {
 
         url += `&filters[servers_groups][identifier]=legacy_standard`;
 
-        let servers = {}
+        const servers = {};
         try {
             for (let i = 0; i < countriesSaved.length; i++) {
-                let data = await this._httpGet(url + `&filters[country_id]=` + countriesSaved[i]);
+                const data = await this._httpGet(url + `&filters[country_id]=` + countriesSaved[i]);
                 if (data) {
                     data.forEach(e => {
                         servers[e['name']] = e['hostname'].replace('.nordvpn.com', '');
@@ -406,6 +379,7 @@ export default class Vpn {
                 }
             }
         } catch (e) {
+            if (isCancelled(e)) throw e;
             this._log.error('error getting servers', e);
             return null;
         }

@@ -1,0 +1,540 @@
+import St from 'gi://St';
+import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+import Vpn from '../Vpn.js';
+import Signals from './Signals.js';
+import ConnectionMenu from './ConnectionMenu.js';
+import StateManager from './StateManager.js';
+import CommonFavorite from './CommonFavorite.js';
+import PanelIcon from './PanelIcon.js';
+import * as Constants from '../constants.js';
+import Logger from '../Logger.js';
+import {isCancelled} from '../common.js';
+import * as RefreshPolicy from './RefreshPolicy.js';
+import * as PanelText from '../PanelText.js';
+
+export default GObject.registerClass(
+    class VpnIndicator extends PanelMenu.Button {
+        _log = new Logger('VpnIndicator');
+        _isLoggedIn = false;
+        _isRefreshing = false;
+        // Cancelled first in destroy(): pending status and login reads reject, and commands that were already
+        // running check it before touching the indicator.
+        _cancellable = new Gio.Cancellable();
+        _pendingLoginCheck = false;
+        _pendingRefresh = false;
+        _menuOpen = false;
+        _transitionalSince = null;
+        _lastStatus = null;
+        _uptimeSyncSec = null;
+        _uptimeSyncAtUs = 0;
+        _uptimeTimer = null;
+        _indicatorName = `VPN Indicator`;
+        _stateManager = null;
+        _lastMenuBuild = null;
+        _refreshTimeoutInSec;
+        _refreshBackoffSec = 0;
+        _lastKnownRunning = false;
+        _timeout = null;
+        _statusPopup = null;
+        _statusLabel = null;
+        _updateMenuLabel = null;
+        _connectMenuItem = null;
+        _disconnectMenuItem = null;
+        _loginMenuItem = null;
+        _logoutMenuItem = null;
+        _vpn = null;
+        _signals = null;
+        _settingsChangedId = null;
+        _commonFavorite = null;
+        _countryMenu = null;
+        _cityMenu = null;
+        _serverMenu = null;
+        _panelIcon = null;
+
+        constructor(extension) {
+            super();
+            this._extension = extension;
+            this._extSettings = extension.getSettings();
+            this._refreshTimeoutInSec = this._extSettings.get_value(`refresh-timeout`).unpack();
+        }
+
+        _init() {
+            super._init(0.5, this._indicatorName, false);
+        }
+
+        _connectChanged() {
+            this._settingsChangedId = this._extSettings.connect(`changed`, (settings, key) => {
+                switch (key) {
+                    case 'refresh-timeout':
+                        this._refreshTimeoutInSec = settings.get_value(`refresh-timeout`).unpack();
+                        break;
+                    case `panel-position`:
+                        this._moveIndicator();
+                        break;
+                    case `panel-styles`:
+                    case `common-panel-style`:
+                        this._panelIcon.updateStyle();
+                        this._updateUptimeClock();
+                        if (this._lastStatus) this._panelIcon.update(this._lastStatus, this._uptimeForPanel());
+                        break;
+                    case `favorite-countries`:
+                        this._countryMenu.updateFavorite();
+                        this._commonFavorite.updateFavorite();
+                        break;
+                    case `favorite-cities`:
+                        this._cityMenu.updateFavorite();
+                        this._commonFavorite.updateFavorite();
+                        break;
+                    case `favorite-servers`:
+                        this._serverMenu.updateFavorite();
+                        this._commonFavorite.updateFavorite();
+                        break;
+                    case `showlogin`:
+                    case `showlogout`:
+                        this._refresh();
+                        break;
+                    case `number-cities-per-countries`:
+                    case `countries-selected-for-cities`:
+                        this._cityMenu.rebuild(this._lastKnownRunning);
+                        break;
+                    case `number-servers-per-countries`:
+                    case `countries-selected-for-servers`:
+                        this._serverMenu.rebuild(this._lastKnownRunning);
+                        break;
+                    case `commonfavorite`: {
+                        this._commonFavorite.showHide(settings.get_boolean(`commonfavorite`));
+                        break;
+                    }
+                }
+            });
+        }
+
+        _setQuickRefresh(open) {
+            this._menuOpen = open;
+            this._refresh();
+        }
+
+        _overrideRefresh(state, overrideKeys) {
+            this._stateManager.refreshOverride(state, overrideKeys);
+            this._refresh();
+        }
+
+        _nextDelaySec() {
+            return RefreshPolicy.nextDelaySec({
+                stateName: this._lastStatus?.currentState.stateName,
+                menuOpen: this._menuOpen,
+                transitionalSinceMs: this._transitionalSince,
+                nowMs: Date.now(),
+                userIntervalSec: this._refreshTimeoutInSec
+            });
+        }
+
+        _trackTransitional(stateName) {
+            if (!RefreshPolicy.isTransitional(stateName)) this._transitionalSince = null;
+            else if (this._transitionalSince === null) this._transitionalSince = Date.now();
+        }
+
+        async _refresh() {
+            if (this._isRefreshing) {
+                // Re-run once the in-flight refresh ends so this request is not lost.
+                this._pendingRefresh = true;
+                return;
+            }
+            this._isRefreshing = true;
+            this._pendingRefresh = false;
+
+            try {
+                this._clearTimeout();
+
+                const t = this._log.startTimer();
+                const status = await this._vpn.getStatus();
+                status.loggedin = this._isLoggedIn;
+                // Use the running flag returned by getStatus() (derived from exit code)
+                // instead of a second isNordVpnRunning() call to avoid duplicate CLI invocations.
+                status.currentState = status.running
+                    ? this._stateManager.resolveState(status)
+                    : this._stateManager.resolveState(null);
+
+                this._lastKnownRunning = status.running;
+                this._lastStatus = status;
+                this._trackTransitional(status.currentState.stateName);
+                this._throttledMenuBuild(status);
+
+                this._updateMenu(status);
+                this._syncUptime(status);
+                this._updateUptimeClock();
+                this._panelIcon.update(status, this._uptimeForPanel());
+
+                const prevBackoff = this._refreshBackoffSec;
+                this._refreshBackoffSec = 0;
+                if (prevBackoff !== 0)
+                    this._log.debug('backoff cleared', {prev: prevBackoff});
+
+                this._log.endTimer(t, 'SPAN', {
+                    operation: '_refresh',
+                    state: status.currentState.stateName,
+                    nextDelay: this._nextDelaySec()
+                });
+            } catch (e) {
+                if (isCancelled(e)) return;
+                const prev = this._refreshBackoffSec;
+                this._refreshBackoffSec = Math.min(this._refreshBackoffSec ? this._refreshBackoffSec * 2 : 5, 60);
+                this._log.warn('refresh failed, backoff increased', {prev, next: this._refreshBackoffSec, error: e?.message});
+                this._log.error('Unable to refresh', e);
+            } finally {
+                this._isRefreshing = false;
+                if (!this._cancellable.is_cancelled()) {
+                    // A refresh requested while this one was in flight (login check, state
+                    // override) runs now so the UI reflects it without waiting for the timer.
+                    if (this._pendingRefresh) {
+                        this._pendingRefresh = false;
+                        this._refresh();
+                    } else {
+                        this._setTimeout(this._nextDelaySec());
+                    }
+                }
+            }
+        }
+
+        _throttledMenuBuild(status) {
+            if ((Date.now() - this._lastMenuBuild) <= 30_000) return;
+            if (status.currentState.stateName === Constants.states[`ERROR`]) return;
+            if (!status.running) return;
+            this._lastMenuBuild = Date.now();
+            this._log.debug('throttledMenuBuild triggered');
+            this._countryMenu.tryBuild(true).catch(e => this._log.error('countryMenu build failed', e));
+            this._cityMenu.tryBuild(true).catch(e => this._log.error('cityMenu build failed', e));
+            this._serverMenu.tryBuild(true).catch(e => this._log.error('serverMenu build failed', e));
+        }
+
+        _updateMenu(status) {
+            this._statusLabel.text = status.connectStatus;
+
+            this._statusPopup.get_label_actor().set_text(status.connectStatus);
+
+            const menu = this._statusPopup.menu;
+            menu.removeAll();
+
+            let hasItems = false;
+            const statusToDisplay = [`country`, `city`, `currentServer`, `serverIp`, `transfer`, `uptime`];
+            statusToDisplay.forEach(key => {
+                if (status[key]) {
+                    const label = key.replace(/([A-Z]+)/g, ` $1`).replace(/([A-Z][a-z])/g, ` $1`).replace(/^./, e => e.toUpperCase());
+                    const menuItem = new PopupMenu.PopupMenuItem(label + `: ` + status[key]);
+                    menu.addMenuItem(menuItem);
+                    hasItems = true;
+                }
+            });
+
+            if (!this._isLoggedIn) {
+                this._statusPopup.hide();
+                this._statusLabel.hide();
+            } else if (hasItems) {
+                this._statusPopup.show();
+                this._statusLabel.hide();
+            } else {
+                this._statusPopup.hide();
+                this._statusLabel.show();
+            }
+
+            if (status.updateMessage) {
+                this._updateMenuLabel.text = Constants.messages.updateAvailable;
+                this._updateMenuLabel.visible = true;
+            } else {
+                this._updateMenuLabel.visible = false;
+            }
+
+            this._connectMenuItem.visible = status.currentState.canConnect;
+            this._disconnectMenuItem.visible = status.currentState.canDisconnect;
+
+            this._countryMenu.showHide(status.currentState.showLists);
+            this._cityMenu.showHide(status.currentState.showLists);
+            this._serverMenu.showHide(status.currentState.showLists);
+            this._commonFavorite.showHide(status.currentState.showLists && this._extSettings.get_boolean(`commonfavorite`));
+
+            this._loginMenuItem.visible = !status.loggedin && this._extSettings.get_boolean(`showlogin`);
+            this._logoutMenuItem.visible = status.loggedin && this._extSettings.get_boolean(`showlogout`);
+        }
+
+        async _connect() {
+            this._vpn.connectVpn().then(result => {
+                // null means throttled — no connection attempt was made, so don't show connecting state
+                if (result === null || this._cancellable.is_cancelled()) return;
+                this._overrideRefresh(Constants.status.connecting);
+            }).catch(e => this._log.error('unable to connect to vpn', e));
+        }
+
+        async _disconnect() {
+            this._vpn.disconnectVpn().then(() => {
+                // Set an override on the status as the command line status takes a while to catch up
+                if (!this._cancellable.is_cancelled()) this._overrideRefresh(Constants.status.disconnecting);
+            }).catch(e => this._log.error('unable to disconnect', e));
+        }
+
+        async _login() {
+            this._overrideRefresh(Constants.status.login);
+            await this._vpn.loginVpn().catch(e => {
+                this._log.error('loginVpn failed', e);
+                // Clear the optimistic login override since no browser flow was launched
+                if (!this._cancellable.is_cancelled()) this._refresh();
+            });
+        }
+
+        async _logout() {
+            await this._vpn.logoutVpn();
+            if (!this._cancellable.is_cancelled()) this._overrideRefresh(Constants.status.logout);
+        }
+
+        // Local uptime clock. nordvpn reports uptime in whole seconds at each poll, so between polls
+        // the panel counts up from the last sync using the monotonic clock instead of spawning nordvpn.
+        _uptimeEstimateSec() {
+            return this._uptimeSyncSec + Math.floor((GLib.get_monotonic_time() - this._uptimeSyncAtUs) / 1_000_000);
+        }
+
+        _uptimeForPanel() {
+            return this._uptimeSyncSec === null ? undefined : this._uptimeEstimateSec();
+        }
+
+        _syncUptime(status) {
+            if (status.currentState.stateName !== Constants.states.CONNECTED) {
+                this._stopUptimeClock(true);
+                return;
+            }
+            const polled = PanelText.parseUptimeSec(status.uptime);
+            if (polled === null) return;
+            // A sub-2s difference is rounding in the whole-second output; resyncing on it would make
+            // the display step backwards. Larger drift (suspend, uptime reset) is corrected here.
+            if (this._uptimeSyncSec === null || Math.abs(polled - this._uptimeEstimateSec()) >= 2) {
+                this._uptimeSyncSec = polled;
+                this._uptimeSyncAtUs = GLib.get_monotonic_time();
+            }
+        }
+
+        // Runs the 1s tick only while CONNECTED and the CONNECTED template shows a live uptime token.
+        _updateUptimeClock() {
+            if (this._lastStatus?.currentState.stateName !== Constants.states.CONNECTED) {
+                this._stopUptimeClock(true);
+                return;
+            }
+            const template = this._panelIcon.getTemplate(Constants.states.CONNECTED);
+            if (this._uptimeSyncSec !== null && PanelText.usesLiveUptime(template)) this._startUptimeClock();
+            else this._stopUptimeClock(false);
+        }
+
+        _startUptimeClock() {
+            if (this._uptimeTimer) return;
+            this._uptimeTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+                if (this._uptimeSyncSec === null) {
+                    this._uptimeTimer = null; // the source is removed on return, don't remove it again
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._panelIcon.update(this._lastStatus, this._uptimeEstimateSec());
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
+
+        _stopUptimeClock(clearSync) {
+            if (this._uptimeTimer) {
+                GLib.Source.remove(this._uptimeTimer);
+                this._uptimeTimer = null;
+            }
+            if (clearSync) this._uptimeSyncSec = null;
+        }
+
+        _clearTimeout() {
+            if (this._timeout) {
+                GLib.Source.remove(this._timeout);
+                this._timeout = undefined;
+            }
+        }
+
+        _openSettings() {
+            this._extension.openPreferences();
+        }
+
+        _buildIndicatorMenu() {
+            const t = this._log.startTimer();
+            this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
+            this.menu.addMenuItem(this._statusPopup);
+            this._signals.connect(this.menu, `open-state-changed`, (menu, open) => this._setQuickRefresh(open));
+
+            this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
+            this.menu.box.add_child(this._statusLabel);
+
+            this._updateMenuLabel = new St.Label({visible: false, style_class: `updatelabel`});
+            this.menu.box.add_child(this._updateMenuLabel);
+
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+            this._connectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.connect);
+            this._signals.connect(this._connectMenuItem, `activate`, () => this._connect().catch(e => this._log.error('unable to connect', e)));
+            this.menu.addMenuItem(this._connectMenuItem);
+
+            this._disconnectMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.disconnect);
+            this._signals.connect(this._disconnectMenuItem, `activate`, () => this._disconnect().catch(e => this._log.error('unable to disconnect', e)));
+            this.menu.addMenuItem(this._disconnectMenuItem);
+
+            this._commonFavorite.build();
+            this.menu.addMenuItem(this._commonFavorite.menu);
+
+            if (this._extSettings.get_boolean(`commonfavorite`)) this._commonFavorite.menu.show();
+            else this._commonFavorite.menu.hide();
+
+            // running=false: nordvpnd state not yet known; menus populate on first _throttledMenuBuild.
+            this._countryMenu.tryBuild(false).catch(e => this._log.error('countryMenu build failed', e));
+            this.menu.addMenuItem(this._countryMenu.menu);
+
+            this._cityMenu.tryBuild(false).catch(e => this._log.error('cityMenu build failed', e));
+            this.menu.addMenuItem(this._cityMenu.menu);
+
+            this._serverMenu.tryBuild(false).catch(e => this._log.error('serverMenu build failed', e));
+            this.menu.addMenuItem(this._serverMenu.menu);
+
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+            const settingsMenuItem = new PopupMenu.PopupMenuItem(`Settings`);
+            this.menu.addMenuItem(settingsMenuItem);
+            this._signals.connect(settingsMenuItem, `activate`, this._openSettings.bind(this));
+
+            this._loginMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.login);
+            this._signals.connect(this._loginMenuItem, `activate`, () => this._login().catch(e => this._log.error('unable to login', e)));
+            this.menu.addMenuItem(this._loginMenuItem);
+
+            this._logoutMenuItem = new PopupMenu.PopupMenuItem(Constants.menus.logout);
+            this._signals.connect(this._logoutMenuItem, `activate`, () => this._logout().catch(e => this._log.error('unable to logout', e)));
+            this.menu.addMenuItem(this._logoutMenuItem);
+
+            this._panelIcon.build();
+            this.add_child(this._panelIcon.button());
+
+            this._signals.connect(this._panelIcon.button(), `button-press-event`, () => {
+                // Login is only checked on click, never on a timer: `nordvpn account` asks a server that rate limits
+                // requests, and `nordvpn login` creates a new login URL each time. _pendingLoginCheck allows one
+                // check at a time, so rapid clicks do not stack them.
+                if (!this._pendingLoginCheck) {
+                    this._pendingLoginCheck = true;
+                    this._vpn.checkLogin().then(loggedIn => {
+                        this._pendingLoginCheck = false;
+                        this._isLoggedIn = loggedIn;
+                        this._refresh();
+                    }).catch(e => {
+                        this._pendingLoginCheck = false;
+                        this._log.error('checkLogin failed', e);
+                    });
+                }
+            });
+
+            // Only refresh again if the login state changed.
+            this._vpn.checkLogin().then(loggedIn => {
+                const wasLoggedIn = this._isLoggedIn;
+                this._isLoggedIn = loggedIn;
+                if (this._isLoggedIn !== wasLoggedIn) {
+                    this._refresh();
+                }
+            }).catch(e => this._log.error('initial checkLogin failed', e));
+            this._log.endTimer(t, 'SPAN', {operation: '_buildIndicatorMenu'});
+        }
+
+        _setTimeout(timeoutDuration) {
+            // Never leave an earlier timer orphaned
+            if (this._timeout) {
+                GLib.Source.remove(this._timeout);
+                this._timeout = null;
+            }
+            const delay = Math.max(1, timeoutDuration + this._refreshBackoffSec);
+            this._timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
+                this._timeout = null; // the source is removed on return, don't remove it again
+                this._refresh().catch(e => this._log.error('unable to refresh', e));
+                return GLib.SOURCE_REMOVE; // Ensure the timeout is only run once
+            });
+        }
+
+        enable() {
+            const t = this._log.startTimer();
+            this._log.debug('enable() called');
+            this._stateManager = new StateManager();
+            this._moveIndicator();
+            this._connectChanged();
+            this._vpn = new Vpn(this._extSettings);
+            this._signals = new Signals();
+            this._commonFavorite = new CommonFavorite(this._overrideRefresh.bind(this), this._extSettings);
+            this._countryMenu = new ConnectionMenu(`Countries`, `countries`, Constants.favorites.favoriteCountries, this._overrideRefresh.bind(this), this._extSettings);
+            this._cityMenu = new ConnectionMenu(`Cities`, `cities`, Constants.favorites.favoriteCities, this._overrideRefresh.bind(this), this._extSettings);
+            this._serverMenu = new ConnectionMenu(`Servers`, `servers`, Constants.favorites.favoriteServers, this._overrideRefresh.bind(this), this._extSettings);
+            this._panelIcon = new PanelIcon(this._extSettings);
+
+            this._buildIndicatorMenu();
+            // Startup is read-only: build UI, fetch status, schedule refresh.
+            // applySettingsToNord() is intentionally omitted here to avoid
+            // blocking writes during login/unlock (see issue #102).
+            // Settings are applied only from the prefs Apply button.
+            this._log.debug('enable() startup: read-only path, skipping applySettingsToNord');
+            // Sync GSettings from NordVPN so the prefs UI reflects actual settings.
+            this._vpn.setSettingsFromNord().catch(e => this._log.error('setSettingsFromNord failed', e));
+            this._refresh().then(() => {
+                this._log.endTimer(t, 'SPAN', {operation: 'enable'});
+            }).catch(e => this._log.error('unable to refresh', e));
+        }
+
+        destroy() {
+            this._cancellable.cancel();
+            this._vpn.destroy();
+            this._clearTimeout();
+            this._stopUptimeClock(true);
+            // Reset so the next enable() gets an immediate throttledMenuBuild on first refresh
+            this._lastMenuBuild = null;
+
+            this._commonFavorite.destroy();
+            this._countryMenu.destroy();
+            this._cityMenu.destroy();
+            this._serverMenu.destroy();
+            this._signals.disconnectAll();
+
+            if (this._settingsChangedId) {
+                this._extSettings.disconnect(this._settingsChangedId);
+                this._settingsChangedId = null;
+            }
+
+            this._commonFavorite = null;
+            this._countryMenu = null;
+            this._cityMenu = null;
+            this._serverMenu = null;
+            this._vpn = null;
+            this._signals = null;
+            this._panelIcon = null;
+            this._stateManager = null;
+            super.destroy();
+        }
+
+        getPanelPosition() {
+            return this._extSettings.get_string(`panel-position`);
+        }
+
+        getName() {
+            return this._indicatorName;
+        }
+
+        _moveIndicator() {
+            const position = this._extSettings.get_string(`panel-position`);
+
+            let box;
+            if (position === `left`) box = Main.panel._leftBox;
+            else if (position === `center`) box = Main.panel._centerBox;
+            else box = Main.panel._rightBox;
+
+            const container = this.container;
+            container.show();
+
+            const parent = container.get_parent();
+            if (parent) parent.remove_child(container);
+
+            box.add_child(container);
+        }
+    });

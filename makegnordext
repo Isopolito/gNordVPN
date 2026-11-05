@@ -38,6 +38,7 @@ delete_random_files_and_directories() {
         -o -name "*.png" \
         -o -name "*.sh" \
         -o -name "package-lock.json" \
+        -o -name "eslint.config.js" \
         -o -name "makegnordext" \
         -o -name ".*.swp" \
         -o -name "*.swp" \
@@ -47,10 +48,14 @@ delete_random_files_and_directories() {
     find . -type d \( \
         -name "__tests__" \
         -o -name "__mocks__" \
+        -o -name "claude_docs" \
         -o -name "node_modules" \
         -o -name ".serena" \
         -o -name ".codex" \
     \) -exec rm -rf {} +
+
+    # img/ only held PNGs, which are deleted above
+    find . -type d -empty -delete
 }
 
 create_zip() {
@@ -80,3 +85,6 @@ check_directory
 create_zip
 
 echo "Package created: $OUTPUT_DIR/gnordvpn-local-v$VERSION.zip"
+
+echo "Running shexli..."
+shexli "$OUTPUT_DIR/gnordvpn-local-v$VERSION.zip"

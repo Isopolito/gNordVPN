@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # debug-logs.sh — gNordVpn extension log viewer
 # Filters GNOME Shell journal to only show gNordVpn lines.
+# Debug and timing lines are off by default. Turn them on in the extension's General preferences page, or with:
+#   gsettings --schemadir ~/.local/share/gnome-shell/extensions/gnordvpn-local@isopolito/schemas \
+#       set org.gnome.shell.extensions.gnordvpn-local debug-logging true
 #
 # Usage:
 #   ./debug-logs.sh                        # live tail (default)
