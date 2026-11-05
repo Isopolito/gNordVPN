@@ -3,36 +3,38 @@ import {
 } from './AppearanceModel.js';
 import {colorsEqual} from './Color.js';
 
-// Panel texts for each size.
+const ICON_TRANSITIONING = '{icon:network-vpn-acquiring-symbolic}';
+
+// Panel texts for each size. A text of only {icon:<name>} shows that icon instead of a label.
 export const SIZE_PRESETS = {
     small: {
         label: 'Small',
         panelTexts: {
             'CONNECTED': '{ctry}',
-            'CONNECTING': '.',
-            'DISCONNECTED': '∅',
-            'DISCONNECTING': '.',
-            'RECONNECTING': '.',
-            'RESTARTING': '.',
-            'ERROR': '⚠',
-            'LOGGED_OUT': '?',
-            'LOGGING_IN': '.',
-            'LOGGING_OUT': '.',
+            'CONNECTING': ICON_TRANSITIONING,
+            'DISCONNECTED': '{icon:network-vpn-disabled-symbolic}',
+            'DISCONNECTING': ICON_TRANSITIONING,
+            'RECONNECTING': ICON_TRANSITIONING,
+            'RESTARTING': ICON_TRANSITIONING,
+            'ERROR': '{icon:dialog-warning-symbolic}',
+            'LOGGED_OUT': '{icon:dialog-question-symbolic}',
+            'LOGGING_IN': ICON_TRANSITIONING,
+            'LOGGING_OUT': ICON_TRANSITIONING,
         },
     },
     medium: {
         label: 'Medium',
         panelTexts: {
             'CONNECTED': '{ctry}#{number}',
-            'CONNECTING': '...',
+            'CONNECTING': ICON_TRANSITIONING,
             'DISCONNECTED': 'OFF',
-            'DISCONNECTING': '...',
-            'RECONNECTING': '...',
-            'RESTARTING': '...',
+            'DISCONNECTING': ICON_TRANSITIONING,
+            'RECONNECTING': ICON_TRANSITIONING,
+            'RESTARTING': ICON_TRANSITIONING,
             'ERROR': 'ERR',
             'LOGGED_OUT': 'OUT',
-            'LOGGING_IN': '...',
-            'LOGGING_OUT': '...',
+            'LOGGING_IN': ICON_TRANSITIONING,
+            'LOGGING_OUT': ICON_TRANSITIONING,
         },
     },
     large: {
@@ -53,7 +55,7 @@ export const SIZE_PRESETS = {
     extraLarge: {
         label: 'Extra Large',
         panelTexts: {
-            'CONNECTED': '{city}, {country}  -  {uptimeHr}:{uptimeMin}:{uptimeSec}  -  ↑{transferUp} ↓{transferDown}',
+            'CONNECTED': '{city}, {country}  -  {uptimeHr}:{uptimeMin}:{uptimeSec}  -  Up {transferUp} Down {transferDown}',
             'CONNECTING': 'VPN CONNECTING',
             'DISCONNECTED': 'VPN DISCONNECTED',
             'DISCONNECTING': 'VPN DISCONNECTING ',

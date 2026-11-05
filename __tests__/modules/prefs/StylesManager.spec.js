@@ -417,6 +417,22 @@ describe('StylesManager', () => {
             expect(provider().css).toContain(`.gnordvpn-preview { ${want.css} }`);
         });
 
+        it('shows an image instead of the label for an icon-only text, and swaps back', () => {
+            const {byTitle} = openPage();
+            const image = () => findAll(Gtk.Image).find(i => i.cssClasses?.includes('gnordvpn-preview'));
+            const connected = byTitle(Adw.ExpanderRow, 'Connected').children[0];
+
+            connected.set_text('{icon:network-vpn-symbolic}');
+            expect(image().visible).toBe(true);
+            expect(image().icon_name).toBe('network-vpn-symbolic');
+            expect(previewLabel().visible).toBe(false);
+
+            connected.set_text('{country}');
+            expect(image().visible).toBe(false);
+            expect(previewLabel().visible).toBe(true);
+            expect(previewLabel().text).toBe('United States');
+        });
+
         it('renders tokens with the fixed sample status for the connected state', () => {
             const {byTitle} = openPage();
             byTitle(Adw.ExpanderRow, 'Connected').children[0].set_text('{country} {number} {tech} {uptime}');

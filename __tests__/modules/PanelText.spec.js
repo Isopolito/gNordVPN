@@ -1,4 +1,4 @@
-import {parseUptimeSec, formatUptime, usesLiveUptime, render} from '../../modules/PanelText.js';
+import {parseUptimeSec, formatUptime, usesLiveUptime, render, iconNameOf} from '../../modules/PanelText.js';
 
 const status = (overrides = {}) => ({
     country: 'United States', city: 'New York', currentServer: 'us8247.nordvpn.com', serverNumber: ['8247'],
@@ -120,5 +120,22 @@ describe('PanelText.render', () => {
 
     it('does not treat $ in values as a replacement pattern', () => {
         expect(render('{city}', status({city: "A$&B"}))).toBe('A$&B');
+    });
+});
+
+describe('PanelText.iconNameOf', () => {
+    it('returns the name for a template that is only an icon token', () => {
+        expect(iconNameOf('{icon:dialog-warning-symbolic}')).toBe('dialog-warning-symbolic');
+    });
+
+    it.each([
+        ['{ctry}'], ['OFF'], [''], [undefined], [null],
+        ['x {icon:dialog-warning-symbolic}'], ['{icon:}'], ['{icon:bad name}'],
+    ])('returns null for %j', (template) => {
+        expect(iconNameOf(template)).toBeNull();
+    });
+
+    it('render leaves an icon token alone', () => {
+        expect(render('{icon:network-vpn-symbolic}', status())).toBe('{icon:network-vpn-symbolic}');
     });
 });

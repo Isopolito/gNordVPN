@@ -8,7 +8,7 @@ import {compile, sameStyles} from './style/StyleCompiler.js';
 import {loadModel} from './style/ModelLoader.js';
 import {SIZE_PRESETS, THEME_PRESETS, applySize, applyTheme, detectSize, detectTheme} from './style/Presets.js';
 import {deleteProfile, isValidName, parseProfiles, saveProfile, serializeProfiles} from './style/Profiles.js';
-import {render} from '../PanelText.js';
+import {iconNameOf, render} from '../PanelText.js';
 
 // Tokens that render in the CONNECTED panel text.
 export const TOKENS = [
@@ -29,6 +29,7 @@ const SPACING_ITEMS = [['compact', 'Compact'], ['normal', 'Normal'], ['roomy', '
 const SIZE_KEYS = Object.keys(SIZE_PRESETS);
 const THEME_KEYS = Object.keys(THEME_PRESETS);
 const CUSTOM_LABEL = 'Custom';
+const PREVIEW_ICON_SIZE = 16;
 
 // Fixed values the preview renders tokens with, shaped like the Vpn status the panel gets.
 export const SAMPLE_STATUS = {
@@ -58,6 +59,7 @@ export default class StylesManager {
         this._sync = [];
         this._previewState = 'CONNECTED';
         this._previewLabel = null;
+        this._previewImage = null;
         this._provider = null;
         this._providerDisplay = null;
         this._activeProfile = null; // profile being edited; set by its Edit button
@@ -390,6 +392,9 @@ export default class StylesManager {
         this._previewLabel = new Gtk.Label({halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER});
         this._previewLabel.add_css_class(PREVIEW_CLASS);
         strip.append(this._previewLabel);
+        this._previewImage = new Gtk.Image({halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, pixel_size: PREVIEW_ICON_SIZE, visible: false});
+        this._previewImage.add_css_class(PREVIEW_CLASS);
+        strip.append(this._previewImage);
         const stripRow = new Adw.PreferencesRow({child: strip});
         group.add(stripRow);
 
@@ -407,7 +412,11 @@ export default class StylesManager {
     _refreshPreview() {
         if (!this._previewLabel || !this._model) return;
         const {text, css} = this._previewOf(this._previewState);
-        this._previewLabel.set_text(text);
+        const iconName = iconNameOf(text);
+        this._previewImage.visible = iconName !== null;
+        this._previewLabel.visible = iconName === null;
+        if (iconName !== null) this._previewImage.icon_name = iconName;
+        else this._previewLabel.set_text(text);
         this._provider.load_from_string(`${PREVIEW_STRIP_CSS}\n.${PREVIEW_CLASS} { ${css} }`);
     }
 

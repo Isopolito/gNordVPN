@@ -3,6 +3,8 @@ import St from 'gi://St';
 import * as Constants from '../constants.js';
 import * as PanelText from '../PanelText.js';
 
+const PANEL_ICON_SIZE = 16;
+
 export default class PanelIcon {
     constructor(settings) {
         this._settings = settings;
@@ -32,13 +34,22 @@ export default class PanelIcon {
         if (!status) return;
 
         const config = this.uiMap[status.currentState.stateName];
+        const style = this.commonStyle + config.css;
+        const iconName = PanelText.iconNameOf(config.panelText);
+        this._icon.visible = iconName !== null;
+        this._label.visible = iconName === null;
+
+        if (iconName !== null) {
+            this._icon.icon_name = iconName;
+            this._icon.set_style(style);
+            return;
+        }
+
         let msg = config.panelText;
         if (status.currentState.stateName === Constants.states.CONNECTED)
             msg = PanelText.render(msg, status, {uptimeSec});
 
         this._label.text = msg || "Style Missing MSG";
-        let style = this.commonStyle;
-        style += config.css;
         this._label.set_style(style);
     }
 
@@ -56,6 +67,11 @@ export default class PanelIcon {
         });
 
         this._label = new St.Label();
-        this._button.set_child(this._label);
+        this._icon = new St.Icon({icon_size: PANEL_ICON_SIZE, visible: false});
+
+        const content = new St.BoxLayout();
+        content.add_child(this._label);
+        content.add_child(this._icon);
+        this._button.set_child(content);
     }
 }

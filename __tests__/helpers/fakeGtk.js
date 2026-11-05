@@ -291,7 +291,7 @@ const simple = (name) => ({[name]: class extends Widget {}})[name];
 export const fakes = {CssProvider, TextView, StringList, ComboRow, SwitchRow, SpinRow, EntryRow, ExpanderRow, ColorDialogButton, RGBA, Label, Grid, Button, Switch, Adjustment, SpinButton, ComboBoxText, ComboBox, ListStore, TreeStore, TreeSelection, TreeView, Entry, Window};
 
 Object.assign(Gtk, {
-    Frame: simple('Frame'), Box: simple('Box'), ScrolledWindow: simple('ScrolledWindow'),
+    Frame: simple('Frame'), Box: simple('Box'), Image: simple('Image'), ScrolledWindow: simple('ScrolledWindow'),
     ColorDialog: simple('ColorDialog'), Popover: class Popover extends Widget { popdown() { this.popped = false; } }, MenuButton: simple('MenuButton'),
     StringList, ColorDialogButton, CssProvider, StyleContext, TextView,
     STYLE_PROVIDER_PRIORITY_APPLICATION: 600,

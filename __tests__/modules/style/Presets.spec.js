@@ -3,6 +3,18 @@ import {compile, normalizeDeclarations} from '../../../modules/prefs/style/Style
 import {STATE_KEYS, defaultModel, normalize, resolveState} from '../../../modules/prefs/style/AppearanceModel.js';
 import {LEGACY_SIZES, LEGACY_THEMES, LEGACY_PANEL_TEXTS, legacyGenerate} from '../../helpers/legacyStyles.js';
 
+const ICON_TEXTS = {
+    '∅': '{icon:network-vpn-disabled-symbolic}',
+    '⚠': '{icon:dialog-warning-symbolic}',
+    '?': '{icon:dialog-question-symbolic}',
+    '.': '{icon:network-vpn-acquiring-symbolic}',
+    '...': '{icon:network-vpn-acquiring-symbolic}',
+};
+
+// The old panel text with the emoji/ASCII symbols replaced, as extensions.gnome.org review asked.
+const withoutSymbols = (text) => (ICON_TEXTS[text] ?? text)
+    .replace('↑{transferUp} ↓{transferDown}', 'Up {transferUp} Down {transferDown}');
+
 describe('presets reproduce the old StylesManager output', () => {
     const combos = LEGACY_SIZES.flatMap(size => Object.keys(LEGACY_THEMES).map(theme => [size, theme]));
 
@@ -11,8 +23,16 @@ describe('presets reproduce the old StylesManager output', () => {
         expect(Object.keys(THEME_PRESETS).sort()).toEqual(Object.keys(LEGACY_THEMES).sort());
     });
 
-    it.each(LEGACY_SIZES)('size %s has exactly the old panel texts', (size) => {
-        expect(SIZE_PRESETS[size].panelTexts).toEqual(LEGACY_PANEL_TEXTS[size]);
+    it.each(LEGACY_SIZES)('size %s has the old panel texts without emoji or ASCII symbols', (size) => {
+        const expected = Object.fromEntries(Object.entries(LEGACY_PANEL_TEXTS[size]).map(([key, text]) => [key, withoutSymbols(text)]));
+        expect(SIZE_PRESETS[size].panelTexts).toEqual(expected);
+    });
+
+    it.each(LEGACY_SIZES)('size %s has only ASCII and no symbol-only text', (size) => {
+        Object.values(SIZE_PRESETS[size].panelTexts).forEach(text => {
+            expect(text).toMatch(/^[\x20-\x7e]+$/);
+            expect(text).toMatch(/[A-Za-z]/);
+        });
     });
 
     it.each(combos)('size %s with theme %s compiles to the old output', (size, theme) => {
@@ -20,7 +40,7 @@ describe('presets reproduce the old StylesManager output', () => {
         const out = compile(buildPreset(size, theme));
         expect(normalizeDeclarations(out.commonCss)).toEqual(normalizeDeclarations(legacy.commonCss));
         STATE_KEYS.forEach(key => {
-            expect(out.panelStyles[key].panelText).toBe(legacy.panelStyles[key].panelText);
+            expect(out.panelStyles[key].panelText).toBe(withoutSymbols(legacy.panelStyles[key].panelText));
             expect(normalizeDeclarations(out.panelStyles[key].css)).toEqual(normalizeDeclarations(legacy.panelStyles[key].css));
         });
     });

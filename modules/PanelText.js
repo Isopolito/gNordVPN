@@ -41,6 +41,11 @@ export function usesLiveUptime(template) {
     return LIVE_UPTIME_TOKENS.test(template ?? '');
 }
 
+// The icon name in an icon-only panel template ("{icon:dialog-warning-symbolic}"), else null.
+export function iconNameOf(template) {
+    return /^\{icon:([\w-]+)\}$/.exec(template ?? '')?.[1] ?? null;
+}
+
 const pad2 = (n) => String(n).padStart(2, '0');
 const orNA = (v) => (v === undefined || v === null ? 'N/A' : String(v));
 

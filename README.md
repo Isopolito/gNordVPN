@@ -89,4 +89,4 @@ Thanks [TheRobVK](https://github.com/ThatRobVK) for creating the original versio
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
