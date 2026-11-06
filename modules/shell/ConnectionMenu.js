@@ -34,6 +34,8 @@ export default class ConnectionMenu extends MenuBase {
     }
 
     updateFavorite() {
+        // Not built (initial or mid-rebuild): the pending build reads the latest favorites itself.
+        if (!this._isBuilt) return;
         const connectionFavs = this._favorites.get(this._favoritesKey).favorites;
 
         // Favorites added since the last update.

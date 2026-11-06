@@ -297,6 +297,21 @@ describe('ConnectionMenu', () => {
             expect(callback).toHaveBeenCalledWith(Constants.status.reconnecting, ['groups', 'Double_VPN']);
         });
 
+        it('ignores updateFavorite during a rebuild and reflects the latest favorites once built', async () => {
+            const {menu, settings} = createGroupMenu({'Double VPN': 'Double_VPN', 'Onion Over VPN': 'Onion_Over_VPN'});
+            await menu.tryBuild(true);
+            expect(menu.isBuilt).toBe(true);
+            menu.rebuild(true);
+            settings.values[GROUP_KEY] = JSON.stringify({'Onion Over VPN': 'Onion_Over_VPN'});
+            expect(() => menu.updateFavorite()).not.toThrow();
+            runIdle();
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(menu.isBuilt).toBe(true);
+            expect(labels(menu.menu)).toEqual(['Onion Over VPN', null, 'Double VPN']);
+        });
+
         it('writes favorite-groups when a group is starred', async () => {
             const {menu, settings} = createGroupMenu();
             await menu.tryBuild(true);
