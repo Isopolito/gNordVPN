@@ -33,7 +33,7 @@ This extension uses the NordVPN command line client, which can be set up as foll
 
 ### Install the extension
 #### Easiest way: 
-Enable on gnome-extensions at [gNordVPN Local on gnome extensions](https://extensions.gnome.org/extension/2569/gnordvpn-local/)
+Enable on gnome-extensions at [gNordVPN on gnome extensions](https://extensions.gnome.org/extension/2569/gnordvpn-local/)
 
 #### Manual install:
 1. Create a folder for the extension with `mkdir ~/.local/share/gnome-shell/extensions/gnordvpn-local@isopolito`
