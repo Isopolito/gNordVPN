@@ -1,7 +1,6 @@
 import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
-import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import {installGLibVariant, installGioBindFlags} from './FakeSettings.js';
@@ -65,7 +64,6 @@ class Widget {
     set_sensitive(v) { this.sensitive = v; }
     get_sensitive() { return this.sensitive; }
     show() { this.visible = true; }
-    get_style_context() { return {add_class: () => {}}; }
     set_child(c) { this.child = c; }
     append(c) { this.children.push(c); }
     add(c) { this.children.push(c); }
@@ -79,124 +77,25 @@ class Label extends Widget {
     set_text(t) { this.label = t; this.text = t; }
 }
 
-class Grid extends Widget {
-    attach(child, col, row, w = 1, h = 1) {
-        if (!this._cells) Object.defineProperty(this, '_cells', {value: [], enumerable: false});
-        this._cells.push({child, col, row, w, h});
-    }
-    cellAt(col, row) { return this._cells?.find(c => c.col === col && c.row === row)?.child; }
-    // The widget in the column right of the Label whose text is `labelText`.
-    controlFor(labelText) {
-        const cell = this._cells?.find(c => c.child instanceof Label && c.child.label === labelText);
-        if (!cell) throw new Error(`No label '${labelText}' in grid`);
-        return this.cellAt(cell.col + 1, cell.row);
-    }
-    hasLabel(labelText) { return !!this._cells?.some(c => c.child instanceof Label && c.child.label === labelText); }
-}
-
 class Button extends Widget {
     // Like GTK, a click on an insensitive button does nothing.
     click() { if (this.sensitive) this.emit('clicked'); }
 }
 
-class Switch extends Widget {
-    // A user toggle: property change (notify::active) plus the state-set signal.
-    userSet(v) { this.active = v; this.emit('state-set', v); }
-    get_active() { return !!this.active; }
-}
-
 class Adjustment extends Widget {}
 
-class SpinButton extends Widget {
-    constructor(props) {
-        super(props);
-        // `this` is the proxy; Widget's constructor returned it
-        if (!this.adjustment) this.adjustment = new Adjustment({value: 0});
-        if (this.value === undefined) this.value = 0;
-    }
-    get_adjustment() { return this.adjustment; }
-    set_value(v) { this.value = v; }
-    get_value() { return this.value; }
+class CheckButton extends Widget {
+    // A user toggle: property change plus the toggled signal, like Gtk.CheckButton.
+    userSet(v) { this.active = v; this.emit('toggled'); }
 }
 
-class ComboBoxText extends Widget {
-    append(id, text) {
-        if (!this.items) Object.defineProperty(this, 'items', {value: [], enumerable: false});
-        this.items.push({id, text});
-    }
-    set_active_id(id) {
-        if (this.activeId === id) return true;
-        this.activeId = id;
-        this.emit('changed');
-        return true;
-    }
-    get_active_id() { return this.activeId ?? null; }
+// Like Gtk.SearchEntry: typing sets the text and emits search-changed.
+class SearchEntry extends Widget {
+    get_text() { return this.text ?? ''; }
+    type(text) { this.text = text; this.emit('search-changed'); }
 }
 
-class ListStore extends Widget {
-    set_column_types() {}
-    append() {
-        if (!this.rows) Object.defineProperty(this, 'rows', {value: [], enumerable: false});
-        this.rows.push([]);
-        return {row: this.rows.length - 1};
-    }
-    set(iter, cols, vals) { cols.forEach((c, i) => { this.rows[iter.row][c] = vals[i]; }); }
-    get_value(iter, col) { return this.rows[iter.row][col]; }
-    get_iter(path) { return [path >= 0 && path < (this.rows?.length ?? 0), {row: path}]; }
-    clear() { if (this.rows) this.rows.length = 0; }
-}
-class TreeStore extends ListStore {
-    append(_parent) { return super.append(); }
-}
-
-class ComboBox extends Widget {
-    // Like GTK, 'changed' only fires when the active row actually changes.
-    set_active(i) {
-        if (this.active === i) return;
-        this.active = i;
-        this.emit('changed');
-    }
-    get_active_iter() {
-        const ok = this.active !== undefined && this.active >= 0 && this.active < (this.model.rows?.length ?? 0);
-        return [ok, ok ? {row: this.active} : null];
-    }
-}
-
-class TreeSelection extends Widget {
-    constructor(model) {
-        super();
-        Object.defineProperty(this, '_model', {value: model, enumerable: false});
-        Object.defineProperty(this, '_rows', {value: new Set(), enumerable: false});
-    }
-    set_mode() {}
-    select_iter(iter) { if (!this._rows.has(iter.row)) { this._rows.add(iter.row); this.emit('changed'); } }
-    unselect_all() { if (this._rows.size) { this._rows.clear(); this.emit('changed'); } }
-    get_selected_rows() { return [[...this._rows].sort((a, b) => a - b), this._model]; }
-    selectedRows() { return [...this._rows].sort((a, b) => a - b); }
-}
-
-class TreeView extends Widget {
-    get_model() { return this.model; }
-    get_selection() {
-        if (!this._selection) Object.defineProperty(this, '_selection', {value: new TreeSelection(this.model), enumerable: false});
-        return this._selection;
-    }
-    insert_column() {}
-}
-
-class Entry extends Widget {
-    get_buffer() {
-        if (!this._buffer) {
-            Object.defineProperty(this, '_buffer', {
-                enumerable: false,
-                value: {text: '', set_text(t) { this.text = t; }, get_text() { return this.text; }},
-            });
-        }
-        return this._buffer;
-    }
-}
-
-// ---- Adwaita rows and color widgets used by the Styles page ----
+// ---- Adwaita rows and color widgets ----
 
 class StringList extends Widget {
     constructor(props) { super(props); this.strings = props?.strings ?? []; }
@@ -288,20 +187,18 @@ class Window extends Widget {
 
 const simple = (name) => ({[name]: class extends Widget {}})[name];
 
-export const fakes = {CssProvider, TextView, StringList, ComboRow, SwitchRow, SpinRow, EntryRow, ExpanderRow, ColorDialogButton, RGBA, Label, Grid, Button, Switch, Adjustment, SpinButton, ComboBoxText, ComboBox, ListStore, TreeStore, TreeSelection, TreeView, Entry, Window};
+export const fakes = {CssProvider, TextView, StringList, ComboRow, SwitchRow, SpinRow, EntryRow, ExpanderRow, ColorDialogButton, RGBA, Label, Button, Adjustment, CheckButton, SearchEntry, Window};
 
 Object.assign(Gtk, {
-    Frame: simple('Frame'), Box: simple('Box'), Image: simple('Image'), ScrolledWindow: simple('ScrolledWindow'),
+    Box: simple('Box'), Image: simple('Image'), ScrolledWindow: simple('ScrolledWindow'),
     ColorDialog: simple('ColorDialog'), Popover: class Popover extends Widget { popdown() { this.popped = false; } }, MenuButton: simple('MenuButton'),
     StringList, ColorDialogButton, CssProvider, StyleContext, TextView,
     STYLE_PROVIDER_PRIORITY_APPLICATION: 600,
     WrapMode: {WORD_CHAR: 3},
-    CellRendererText: simple('CellRendererText'), TreeViewColumn: simple('TreeViewColumn'),
-    Label, Grid, Button, Switch, Adjustment, SpinButton, ComboBoxText, ComboBox, ListStore, TreeStore,
-    TreeView, Entry,
+    Label, Button, Adjustment,
+    CheckButton, SearchEntry,
     Orientation: {VERTICAL: 1, HORIZONTAL: 0},
     Align: {START: 1, END: 2, CENTER: 3},
-    SelectionMode: {MULTIPLE: 3},
     PolicyType: {NEVER: 2, AUTOMATIC: 1},
 });
 Object.assign(Adw, {
@@ -310,7 +207,6 @@ Object.assign(Adw, {
 });
 Gdk.RGBA = RGBA;
 Gdk.Display = {get_default: () => ({get_monitors: () => ({get_item: () => null})})};
-GObject.TYPE_STRING = 'gchararray';
 GLib.markup_escape_text = (s) => s;
 installGLibVariant(GLib);
 installGioBindFlags(Gio);

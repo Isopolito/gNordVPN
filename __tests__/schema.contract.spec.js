@@ -63,7 +63,7 @@ describe('schema contract', () => {
         expect(reads.has('refresh-timeout')).toBe(true);          // VpnIndicator + bind
         expect(reads.has('number-cities-per-countries')).toBe(true); // bind only in prefs
         expect(reads.has('favorite-cities')).toBe(true);          // via constants
-        expect(writes.has('panel-position')).toBe(true);
+        expect(writes.has('panel-appearance')).toBe(true);
         expect(other.has('protocol')).toBe(true);                 // ResetManager list
         expect(reads.size).toBeGreaterThan(20);
     });
@@ -104,13 +104,16 @@ describe('schema contract', () => {
     });
 
     describe('string keys with a fixed set of values', () => {
-        // The selectable values are the ones the prefs combo boxes offer.
+        // The selectable values are the ones the prefs combo rows offer.
         const prefsSrc = sources[path.join('modules', 'prefs', 'GnordVpnPrefs.js')];
-        const comboValues = (model) => matchAll(new RegExp(`${model}\\.set\\(${model}\\.append\\(\\),\\s*\\[0,\\s*1\\],\\s*\\['([^']+)'`, 'g'), prefsSrc).map(m => m[1]);
-        const technologies = comboValues('techModel');
-        const protocols = comboValues('protoModel');
+        const comboValues = (name) => {
+            const list = new RegExp(`const ${name} = \\[(.*)\\];`).exec(prefsSrc)?.[1] ?? '';
+            return matchAll(/\['([^']+)',/g, list).map(m => m[1]);
+        };
+        const technologies = comboValues('TECHNOLOGIES');
+        const protocols = comboValues('PROTOCOLS');
 
-        it('finds the combo box values', () => {
+        it('finds the combo row values', () => {
             expect(technologies).toEqual(['OPENVPN', 'NORDLYNX']);
             expect(protocols).toEqual(['UDP', 'TCP']);
         });

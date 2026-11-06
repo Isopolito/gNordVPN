@@ -35,6 +35,9 @@
         <key name="favorite-servers" type="s">
             <default>""</default>
         </key>
+        <key name="favorite-groups" type="s">
+            <default>""</default>
+        </key>
         <key name="number-cities-per-countries" type="i">
             <range min="0" max="10000"/>
             <default>10</default>
@@ -60,6 +63,10 @@
         </key>
         <key name="commonfavorite" type="b">
             <default>false</default>
+        </key>
+        <key name="showgroups" type="b">
+            <default>true</default>
+            <summary>Show the Groups submenu</summary>
         </key>
         <key name="autoconnect" type="b">
             <default>false</default>

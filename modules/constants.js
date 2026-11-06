@@ -2,6 +2,7 @@ export const favorites = {
     favoriteCountries: 'favorite-countries',
     favoriteCities: 'favorite-cities',
     favoriteServers: 'favorite-servers',
+    favoriteGroups: 'favorite-groups',
 };
 
 export const menus = {

@@ -20,6 +20,8 @@ export default class ConnectionMenu extends MenuBase {
         this._menuSeperator = null;
         this._buildGen = 0;
         this._buildInFlight = false;
+        // Optional: lets the owner re-apply its visibility rules after a build (tryBuild shows populated menus).
+        this.onBuilt = null;
         // Marks teardown: a build that was in flight when destroy() ran must not retry.
         this._cancellable = new Gio.Cancellable();
 
@@ -219,6 +221,7 @@ export default class ConnectionMenu extends MenuBase {
         }
 
         this._isBuilt = true;
+        this.onBuilt?.();
     }
 
     showHide(show = true) {

@@ -11,6 +11,7 @@ const CMD_VPNSTATUS = `nordvpn status`;
 const CMD_VPNACCOUNT = `nordvpn account`;
 const CMD_COUNTRIES = `nordvpn countries`;
 const CMD_CITIES = `nordvpn cities`;
+const CMD_GROUPS = `nordvpn groups`;
 const CMD_SETTINGS = `nordvpn s`;
 const CMD_FETCH_SETTINGS = `nordvpn settings`;
 const CMD_AUTOCONNECT_ON = `nordvpn set autoconnect on `;
@@ -284,6 +285,7 @@ export default class Vpn {
             case 'countries': return this.getCountries(false, running);
             case 'cities':    return this.getCities(running);
             case 'servers':   return this.getServers(running);
+            case 'groups':    return this.getGroups(running);
         }
         return null;
     }
@@ -318,6 +320,19 @@ export default class Vpn {
         // Better to return nothing so calling code can handle appropriately rather than a list of error message words
         if (Object.keys(processedCountries).length < 5) return null;
         return processedCountries;
+    }
+
+    async getGroups(running = true) {
+        const standardOut = await this._execAsyncIfRunning(CMD_GROUPS, running);
+        const processedGroups = {};
+        for (const line of standardOut.split(`\n`)) {
+            const names = line.trim().split(/\s+/);
+            if (!names.every(name => /^[A-Za-z0-9_]+$/.test(name))) continue;
+            for (const name of names) processedGroups[name.replace(/_/g, ` `)] = name;
+        }
+
+        if (Object.keys(processedGroups).length === 0) return null;
+        return processedGroups;
     }
 
     async getCities(running = true) {

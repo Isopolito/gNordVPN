@@ -143,6 +143,21 @@ describe('StateManager.resolveState', () => {
             expect(sm.stateOverride).toBeUndefined();
         });
 
+        it('a groups override has no status field to match, so it clears on expiry', () => {
+            sm.refreshOverride(S.RECONNECTING, ['groups', 'Double_VPN']);
+            for (let i = 0; i < sm.STATE_OVERRIDE_DURATION; i++) {
+                expect(sm.resolveState(loggedIn(S.CONNECTED, {country: 'Double_VPN'})).stateName).toBe(S.RECONNECTING);
+            }
+            expect(sm.resolveState(loggedIn(S.CONNECTED)).stateName).toBe(S.CONNECTED);
+            expect(sm.stateOverride).toBeUndefined();
+        });
+
+        it('a groups override clears on a state transition', () => {
+            sm.refreshOverride(S.RECONNECTING, ['groups', 'Double_VPN']);
+            expect(sm.resolveState(loggedIn(S.CONNECTING)).stateName).toBe(S.CONNECTING);
+            expect(sm.stateOverride).toBeUndefined();
+        });
+
         it('a non-matching key leaves the override active', () => {
             sm.refreshOverride(S.RECONNECTING, ['countries', 'France']);
             expect(sm.resolveState(loggedIn(S.CONNECTED, {country: 'Germany'})).stateName).toBe(S.RECONNECTING);
