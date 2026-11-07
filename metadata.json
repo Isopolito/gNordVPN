@@ -1,5 +1,5 @@
 {
-  "name": "gNordVPN-Local",
+  "name": "gNordVPN",
   "description": "A Gnome extension that shows the NordVPN status in the top bar and provides the ability to configure certain aspects of the connection.",
   "uuid": "gnordvpn-local@isopolito",
   "url": "https://github.com/Isopolito/gNordVPN",

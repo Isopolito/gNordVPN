@@ -29,11 +29,11 @@ export default class GnordVpnPrefs {
     }
 
     _createVersionRow() {
-        const name = this._metadata.name ?? 'gNordVpn-Local';
-        const version = this._metadata.version ?? 'unknown';
+        const name = this._metadata.name ?? 'gNordVPN';
+        const version = this._metadata.version;
         const url = this._metadata.url ?? '';
 
-        const row = new Adw.ActionRow({title: GLib.markup_escape_text(`${name}, v${version}`, -1)});
+        const row = new Adw.ActionRow({title: GLib.markup_escape_text(version ? `${name}, v${version}` : name, -1)});
         if (url) {
             const escapedUrl = GLib.markup_escape_text(url, -1);
             row.subtitle = `<a href="${escapedUrl}">${escapedUrl}</a>`;

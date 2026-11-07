@@ -28,7 +28,7 @@ async function buildPrefs({settings = {}, cli = {}} = {}) {
         'nordvpn countries': COUNTRIES_OUT,
         ...cli,
     });
-    const prefs = new GnordVpnPrefs(fake, {name: 'gNordVpn-Local', version: '1'});
+    const prefs = new GnordVpnPrefs(fake, {name: 'gNordVPN', version: '1'});
     prefs._vpn._procCom = procCom;
     prefs._vpn._httpGet = async () => COUNTRY_IDS;
     const window = createWindow();
@@ -52,13 +52,23 @@ describe('GnordVpnPrefs', () => {
     describe('General page', () => {
         it('shows the version row with the repo link', async () => {
             resetRegistry();
-            const prefs = new GnordVpnPrefs(new FakeSettings({}), {name: 'gNordVpn-Local', version: '7', url: 'https://example.com/repo'});
+            const prefs = new GnordVpnPrefs(new FakeSettings({}), {name: 'gNordVPN', version: '7', url: 'https://example.com/repo'});
             prefs._vpn._procCom = createFakeProcCom({'nordvpn status': new Error('down'), 'nordvpn account': new Error('x'), 'nordvpn countries': COUNTRIES_OUT});
             prefs._vpn._httpGet = async () => COUNTRY_IDS;
             prefs.fillPreferencesWindow(createWindow());
             await flush();
-            const row = rowTitled(Adw.ActionRow, 'gNordVpn-Local, v7');
+            const row = rowTitled(Adw.ActionRow, 'gNordVPN, v7');
             expect(row.subtitle).toBe('<a href="https://example.com/repo">https://example.com/repo</a>');
+        });
+
+        it('shows only the name when metadata has no version', async () => {
+            resetRegistry();
+            const prefs = new GnordVpnPrefs(new FakeSettings({}), {name: 'gNordVPN'});
+            prefs._vpn._procCom = createFakeProcCom({'nordvpn status': new Error('down'), 'nordvpn account': new Error('x'), 'nordvpn countries': COUNTRIES_OUT});
+            prefs._vpn._httpGet = async () => COUNTRY_IDS;
+            prefs.fillPreferencesWindow(createWindow());
+            await flush();
+            expect(rowTitled(Adw.ActionRow, 'gNordVPN')).toBeTruthy();
         });
 
         it('shows the panel position setting and writes changes to panel-position', async () => {
@@ -363,7 +373,7 @@ describe('closing the preferences window', () => {
     function openWindow({holdCountries} = {}) {
         resetRegistry();
         const fake = new FakeSettings({});
-        const prefs = new GnordVpnPrefs(fake, {name: 'gNordVpn-Local', version: '1'});
+        const prefs = new GnordVpnPrefs(fake, {name: 'gNordVPN', version: '1'});
         const calls = [];
         prefs._vpn._procCom = {
             calls,
