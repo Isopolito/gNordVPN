@@ -35,7 +35,7 @@ CAPTURE=false
 CAPTURE_FILE=""
 SUMMARY_FILE=""
 JOURNAL_OUTPUT_MODE="short-iso-precise"
-EXTENSION_PATTERN='gNordVpn|gnordvpn-local@isopolito|/gnome-shell/extensions/gnordvpn-local@isopolito/|gNordVPN-Local'
+EXTENSION_PATTERN='gNordVpn|gnordvpn-local@isopolito|/gnome-shell/extensions/gnordvpn-local@isopolito/|gNordVPN'
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
