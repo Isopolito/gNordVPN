@@ -162,6 +162,16 @@ describe('StylesManager', () => {
             expect(compiled().commonCss).toContain('padding: 9px');
         });
 
+        it('spin rows accept negative px and write them to the model', () => {
+            const {byTitle, compiled, stored} = openPage();
+            byTitle(Adw.ComboRow, 'Spacing').selected = 3;
+            const margin = byTitle(Adw.SpinRow, 'Margin top (px)');
+            expect(margin.adjustment.lower).toBeLessThan(0);
+            margin.value = -4;
+            expect(stored().shape.margin.top).toBe('-4px');
+            expect(compiled().commonCss).toContain('-4px');
+        });
+
         it('a panel text edit and a per-state override edit write the compiled text', () => {
             const {byTitle, compiled} = openPage();
             const connected = byTitle(Adw.ExpanderRow, 'Connected').children[0];

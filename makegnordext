@@ -71,7 +71,7 @@ create_zip() {
     delete_random_files_and_directories
 
     mkdir -p "$OUTPUT_DIR"
-    zip -r "$OUTPUT_DIR/gnordvpn-local-v$VERSION.zip" .
+    zip -r "$OUTPUT_DIR/gnordvpn-v$VERSION.zip" .
 
     cd - > /dev/null
     rm -rf "$temp_dir"
@@ -84,7 +84,7 @@ echo "Packaging GNordVPN GNOME extension..."
 check_directory
 create_zip
 
-echo "Package created: $OUTPUT_DIR/gnordvpn-local-v$VERSION.zip"
+echo "Package created: $OUTPUT_DIR/gnordvpn-v$VERSION.zip"
 
 echo "Running shexli..."
-shexli "$OUTPUT_DIR/gnordvpn-local-v$VERSION.zip"
+shexli "$OUTPUT_DIR/gnordvpn-v$VERSION.zip"

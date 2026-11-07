@@ -56,6 +56,7 @@ export default GObject.registerClass(
         _countryMenu = null;
         _cityMenu = null;
         _serverMenu = null;
+        _groupMenu = null;
         _panelIcon = null;
 
         constructor(extension) {
@@ -96,6 +97,13 @@ export default GObject.registerClass(
                         this._serverMenu.updateFavorite();
                         this._commonFavorite.updateFavorite();
                         break;
+                    case `favorite-groups`:
+                        this._groupMenu.updateFavorite();
+                        this._commonFavorite.updateFavorite();
+                        break;
+                    case `showgroups`:
+                        this._applyGroupsVisibility();
+                        break;
                     case `showlogin`:
                     case `showlogout`:
                         this._refresh();
@@ -114,6 +122,11 @@ export default GObject.registerClass(
                     }
                 }
             });
+        }
+
+        _onMenuOpenChanged(open) {
+            this._setQuickRefresh(open);
+            if (open && this._lastKnownRunning) this._groupMenu.rebuild(this._lastKnownRunning);
         }
 
         _setQuickRefresh(open) {
@@ -212,6 +225,11 @@ export default GObject.registerClass(
             this._countryMenu.tryBuild(true).catch(e => this._log.error('countryMenu build failed', e));
             this._cityMenu.tryBuild(true).catch(e => this._log.error('cityMenu build failed', e));
             this._serverMenu.tryBuild(true).catch(e => this._log.error('serverMenu build failed', e));
+            this._groupMenu.tryBuild(true).catch(e => this._log.error('groupMenu build failed', e));
+        }
+
+        _applyGroupsVisibility(status = this._lastStatus) {
+            this._groupMenu.showHide(!!status?.currentState.showLists && this._extSettings.get_boolean(`showgroups`));
         }
 
         _updateMenu(status) {
@@ -257,6 +275,7 @@ export default GObject.registerClass(
             this._countryMenu.showHide(status.currentState.showLists);
             this._cityMenu.showHide(status.currentState.showLists);
             this._serverMenu.showHide(status.currentState.showLists);
+            this._applyGroupsVisibility(status);
             this._commonFavorite.showHide(status.currentState.showLists && this._extSettings.get_boolean(`commonfavorite`));
 
             this._loginMenuItem.visible = !status.loggedin && this._extSettings.get_boolean(`showlogin`);
@@ -363,7 +382,7 @@ export default GObject.registerClass(
             const t = this._log.startTimer();
             this._statusPopup = new PopupMenu.PopupSubMenuMenuItem(`Checking...`);
             this.menu.addMenuItem(this._statusPopup);
-            this._signals.connect(this.menu, `open-state-changed`, (menu, open) => this._setQuickRefresh(open));
+            this._signals.connect(this.menu, `open-state-changed`, (menu, open) => this._onMenuOpenChanged(open));
 
             this._statusLabel = new St.Label({text: `Checking...`, y_expand: false, style_class: `statuslabel`});
             this.menu.box.add_child(this._statusLabel);
@@ -396,6 +415,9 @@ export default GObject.registerClass(
 
             this._serverMenu.tryBuild(false).catch(e => this._log.error('serverMenu build failed', e));
             this.menu.addMenuItem(this._serverMenu.menu);
+
+            this._groupMenu.tryBuild(false).catch(e => this._log.error('groupMenu build failed', e));
+            this.menu.addMenuItem(this._groupMenu.menu);
 
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -468,6 +490,8 @@ export default GObject.registerClass(
             this._countryMenu = new ConnectionMenu(`Countries`, `countries`, Constants.favorites.favoriteCountries, this._overrideRefresh.bind(this), this._extSettings);
             this._cityMenu = new ConnectionMenu(`Cities`, `cities`, Constants.favorites.favoriteCities, this._overrideRefresh.bind(this), this._extSettings);
             this._serverMenu = new ConnectionMenu(`Servers`, `servers`, Constants.favorites.favoriteServers, this._overrideRefresh.bind(this), this._extSettings);
+            this._groupMenu = new ConnectionMenu(`Groups`, `groups`, Constants.favorites.favoriteGroups, this._overrideRefresh.bind(this), this._extSettings);
+            this._groupMenu.onBuilt = () => this._applyGroupsVisibility();
             this._panelIcon = new PanelIcon(this._extSettings);
 
             this._buildIndicatorMenu();
@@ -495,6 +519,7 @@ export default GObject.registerClass(
             this._countryMenu.destroy();
             this._cityMenu.destroy();
             this._serverMenu.destroy();
+            this._groupMenu.destroy();
             this._signals.disconnectAll();
 
             if (this._settingsChangedId) {
@@ -506,6 +531,7 @@ export default GObject.registerClass(
             this._countryMenu = null;
             this._cityMenu = null;
             this._serverMenu = null;
+            this._groupMenu = null;
             this._vpn = null;
             this._signals = null;
             this._panelIcon = null;

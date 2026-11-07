@@ -12,35 +12,31 @@ describe('Vpn.setSettingsFromNord', () => {
 
         expect(procCom.calls).toEqual([STATUS, SETTINGS]);
         // Only the lines resolveSettingsKey maps are written; Routing, Tray, DNS, ... are ignored.
-        // Characterization: current CLIs print "Protocol: NordLynx" (no Technology line), so the
-        // extension stores 'NordLynx' in `protocol`, which is not one of the UDP/TCP combo values.
         expect(settings.writes).toEqual([
-            ['protocol', 'NordLynx'],
+            ['connection-protocol', 'nordlynx'],
             ['firewall', true],
             ['killswitch', false],
+            ['protection', false],
             ['notify', true],
             ['autoconnect', true],
+            ['lan-discovery', false],
+            ['post-quantum', false],
         ]);
     });
 
-    it('maps the legacy output with Technology, Threat Protection Lite, Obfuscate, IPv6 and Analytics', async () => {
+    it('ignores retired legacy lines and an unmapped protocol string', async () => {
         const settings = new FakeSettings({firewall: true, autoconnect: true});
         const procCom = createFakeProcCom({[STATUS]: 'ok', [SETTINGS]: readFixture('settings-legacy.txt')});
         await createVpn({procCom, settings}).setSettingsFromNord();
 
-        expect(settings.get_string('technology')).toBe('OPENVPN');
-        expect(settings.get_string('protocol')).toBe('UDP');
+        expect(settings.get_string('connection-protocol')).toBe('nordlynx');
         expect(settings.get_boolean('firewall')).toBe(false);
         expect(settings.get_boolean('killswitch')).toBe(true);
-        expect(settings.get_boolean('cybersec')).toBe(false);
-        expect(settings.get_boolean('obfuscate')).toBe(false);
         expect(settings.get_boolean('notify')).toBe(false);
         expect(settings.get_boolean('autoconnect')).toBe(false);
-        expect(settings.get_boolean('ipv6')).toBe(false);
         expect(settings.get_boolean('analytics')).toBe(true);
         expect(settings.writes.map(([k]) => k).sort()).toEqual([
-            'analytics', 'autoconnect', 'cybersec', 'firewall', 'ipv6', 'killswitch',
-            'notify', 'obfuscate', 'protocol', 'technology',
+            'analytics', 'autoconnect', 'firewall', 'killswitch', 'notify',
         ]);
     });
 
@@ -63,20 +59,19 @@ describe('Vpn.setSettingsFromNord', () => {
 
 describe('Vpn.applySettingsToNord', () => {
     const CUSTOM = {
-        firewall: true, analytics: false, autoconnect: true, cybersec: false, killswitch: true,
-        obfuscate: false, ipv6: true, notify: false, protocol: 'TCP', technology: 'OPENVPN',
+        firewall: true, analytics: false, autoconnect: true, protection: true, killswitch: true,
+        notify: false, 'lan-discovery': true, 'post-quantum': false, 'connection-protocol': 'openvpn_tcp',
     };
     const COMMANDS = [
         'nordvpn s firewall true',
         'nordvpn s analytics false',
         'nordvpn s autoconnect true',
-        'nordvpn s cybersec false',
+        'nordvpn s protection true',
         'nordvpn s killswitch true',
-        'nordvpn s obfuscate false',
-        'nordvpn s ipv6 true',
         'nordvpn s notify false',
-        'nordvpn s protocol TCP',
-        'nordvpn s technology OPENVPN',
+        'nordvpn s lan-discovery true',
+        'nordvpn s post-quantum false', // off before leaving NordLynx
+        'nordvpn s protocol openvpn_tcp',
         'nordvpn s firewall true', // the trailing duplicate firewall call
     ];
 
@@ -86,6 +81,23 @@ describe('Vpn.applySettingsToNord', () => {
         expect(procCom.calls).toEqual([STATUS, ...COMMANDS]);
     });
 
+    it('sets protocol before post-quantum when targeting NordLynx', async () => {
+        const procCom = createFakeProcCom();
+        const settings = new FakeSettings({...CUSTOM, 'connection-protocol': 'nordlynx', 'post-quantum': true});
+        await createVpn({procCom, settings}).applySettingsToNord();
+        expect(procCom.calls.slice(7, 10)).toEqual([
+            'nordvpn s lan-discovery true', 'nordvpn s protocol nordlynx', 'nordvpn s post-quantum true',
+        ]);
+        expect(procCom.calls).toHaveLength(11);
+    });
+
+    it('forces post-quantum off before a non-NordLynx protocol even if enabled', async () => {
+        const procCom = createFakeProcCom();
+        const settings = new FakeSettings({...CUSTOM, 'post-quantum': true});
+        await createVpn({procCom, settings}).applySettingsToNord();
+        expect(procCom.calls.slice(8, 10)).toEqual(['nordvpn s post-quantum false', 'nordvpn s protocol openvpn_tcp']);
+    });
+
     it('issues nothing but the status check when the daemon is not running', async () => {
         const procCom = createFakeProcCom({[STATUS]: new Error('daemon down')});
         await createVpn({procCom, settings: new FakeSettings(CUSTOM)}).applySettingsToNord();
@@ -93,7 +105,7 @@ describe('Vpn.applySettingsToNord', () => {
     });
 
     it('keeps going when one command is rejected', async () => {
-        const procCom = createFakeProcCom({'nordvpn s obfuscate false': new Error('not supported with NordLynx')});
+        const procCom = createFakeProcCom({'nordvpn s post-quantum false': new Error('not supported with OpenVPN')});
         await createVpn({procCom, settings: new FakeSettings(CUSTOM)}).applySettingsToNord();
         expect(procCom.calls).toEqual([STATUS, ...COMMANDS]);
     });
@@ -113,8 +125,8 @@ describe('Vpn.applySettingsToNord', () => {
 
         const pending = createVpn({procCom, settings}).applySettingsToNord();
         settings.set_boolean('firewall', false);
-        settings.set_string('protocol', 'UDP');
-        settings.set_boolean('ipv6', false);
+        settings.set_string('connection-protocol', 'nordlynx');
+        settings.set_boolean('lan-discovery', false);
         release();
         await pending;
 

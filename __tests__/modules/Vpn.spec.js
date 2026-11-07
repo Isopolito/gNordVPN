@@ -1,5 +1,6 @@
 import Gio from 'gi://Gio';
 import Soup from 'gi://Soup';
+import * as helpers from '../helpers/vpn.js';
 
 // Vpn.js talks to GNOME through gi:// modules, which jest maps to the stubs in __mocks__/gi.
 // The constructor needs a few fakes on those stubs; ProcCom is replaced per test.
@@ -57,5 +58,45 @@ describe('checkLogin', () => {
         await vpn.checkLogin();
         expect(mockProcCom.calls).not.toContain('nordvpn login');
         expect(mockProcCom.calls).toContain('nordvpn account');
+    });
+});
+
+describe('getGroups', () => {
+    const GROUPS = 'nordvpn groups';
+    const groupsVpn = (out) => helpers.createVpn({procCom: helpers.createFakeProcCom({[GROUPS]: out})});
+
+    it('parses the real `nordvpn groups` output into display names', async () => {
+        expect(await groupsVpn(helpers.readFixture('groups.txt')).getGroups()).toEqual({
+            'Dedicated IP': 'Dedicated_IP',
+            'Double VPN': 'Double_VPN',
+            'Onion Over VPN': 'Onion_Over_VPN',
+            'Standard VPN Servers': 'Standard_VPN_Servers',
+            'Dedicated Server': 'Dedicated_Server',
+        });
+    });
+
+    it('accepts one group per line', async () => {
+        expect(await groupsVpn('Double_VPN\nOnion_Over_VPN\n').getGroups()).toEqual({'Double VPN': 'Double_VPN', 'Onion Over VPN': 'Onion_Over_VPN'});
+    });
+
+    it('drops a "new version available" notice', async () => {
+        const out = `A new version of NordVPN is available! Please update the application.\n${helpers.readFixture('groups.txt')}`;
+        const groups = await groupsVpn(out).getGroups();
+        expect(Object.values(groups)).toEqual(['Dedicated_IP', 'Double_VPN', 'Onion_Over_VPN', 'Standard_VPN_Servers', 'Dedicated_Server']);
+    });
+
+    it('returns null for empty output or output with only a notice', async () => {
+        expect(await groupsVpn('').getGroups()).toBeNull();
+        expect(await groupsVpn('A new version of NordVPN is available! Please update the application.\n').getGroups()).toBeNull();
+    });
+
+    it('returns null without running nordvpn when the daemon is not running', async () => {
+        const procCom = helpers.createFakeProcCom({[GROUPS]: 'Double_VPN'});
+        expect(await helpers.createVpn({procCom}).getGroups(false)).toBeNull();
+        expect(procCom.calls).toEqual([]);
+    });
+
+    it('is what getConnectionList returns for groups', async () => {
+        expect(await groupsVpn('Double_VPN').getConnectionList('groups')).toEqual({'Double VPN': 'Double_VPN'});
     });
 });

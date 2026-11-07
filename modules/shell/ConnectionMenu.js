@@ -20,6 +20,8 @@ export default class ConnectionMenu extends MenuBase {
         this._menuSeperator = null;
         this._buildGen = 0;
         this._buildInFlight = false;
+        // Optional: lets the owner re-apply its visibility rules after a build (tryBuild shows populated menus).
+        this.onBuilt = null;
         // Marks teardown: a build that was in flight when destroy() ran must not retry.
         this._cancellable = new Gio.Cancellable();
 
@@ -32,6 +34,8 @@ export default class ConnectionMenu extends MenuBase {
     }
 
     updateFavorite() {
+        // Not built (initial or mid-rebuild): the pending build reads the latest favorites itself.
+        if (!this._isBuilt) return;
         const connectionFavs = this._favorites.get(this._favoritesKey).favorites;
 
         // Favorites added since the last update.
@@ -219,6 +223,7 @@ export default class ConnectionMenu extends MenuBase {
         }
 
         this._isBuilt = true;
+        this.onBuilt?.();
     }
 
     showHide(show = true) {

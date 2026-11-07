@@ -1,5 +1,6 @@
 import {jest} from '@jest/globals';
 import Gio from 'gi://Gio';
+import Adw from 'gi://Adw';
 import GLib from 'gi://GLib';
 import {createFakeProcCom} from '../../helpers/vpn.js';   // first: patches the gi stubs Vpn.js needs
 import {FakeSettings} from '../../helpers/FakeSettings.js';
@@ -7,7 +8,7 @@ import {fakes, registry, resetRegistry, findAll, createWindow} from '../../helpe
 import GnordVpnPrefs from '../../../modules/prefs/GnordVpnPrefs.js';
 import ResetManager from '../../../modules/prefs/ResetManager.js';
 
-const {Grid, Button, Switch, SpinButton, ComboBoxText, ComboBox, TreeView, Adjustment} = fakes;
+const {Button, CheckButton} = fakes;
 
 const COUNTRIES_OUT = 'Canada\nFrance\nGermany\nJapan\nUnited_States\n';
 const COUNTRY_IDS = [
@@ -27,67 +28,82 @@ async function buildPrefs({settings = {}, cli = {}} = {}) {
         'nordvpn countries': COUNTRIES_OUT,
         ...cli,
     });
-    const prefs = new GnordVpnPrefs(fake, {name: 'gNordVpn-Local', version: '1'});
+    const prefs = new GnordVpnPrefs(fake, {name: 'gNordVPN', version: '1'});
     prefs._vpn._procCom = procCom;
     prefs._vpn._httpGet = async () => COUNTRY_IDS;
     const window = createWindow();
     prefs.fillPreferencesWindow(window);
     await flush();
     fake.writes.length = 0; // only record what the test itself does
-    const grid = (label) => {
-        const g = findAll(Grid).find(x => x.hasLabel(label));
-        if (!g) throw new Error(`no grid with label '${label}'`);
-        return g;
-    };
-    return {prefs, settings: fake, procCom, window, grid};
+    return {prefs, settings: fake, procCom, window};
 }
+
+const rowTitled = (Class, title) => {
+    const row = findAll(Class).find(r => r.title === title);
+    if (!row) throw new Error(`no ${Class.name} titled '${title}'`);
+    return row;
+};
+const switchRow = (title) => rowTitled(Adw.SwitchRow, title);
+const comboRow = (title) => rowTitled(Adw.ComboRow, title);
 
 const buttonLabelled = (label) => findAll(Button).find(b => b.label === label);
 
 describe('GnordVpnPrefs', () => {
     describe('General page', () => {
-        it('shows the panel position setting and writes changes to panel-position', async () => {
-            const {settings, grid} = await buildPrefs();
-            const combo = grid('Select Panel Position:').controlFor('Select Panel Position:');
-            expect(combo).toBeInstanceOf(ComboBoxText);
-            expect(combo.get_active_id()).toBe('right');
+        it('shows the version row with the repo link', async () => {
+            resetRegistry();
+            const prefs = new GnordVpnPrefs(new FakeSettings({}), {name: 'gNordVPN', version: '7', url: 'https://example.com/repo'});
+            prefs._vpn._procCom = createFakeProcCom({'nordvpn status': new Error('down'), 'nordvpn account': new Error('x'), 'nordvpn countries': COUNTRIES_OUT});
+            prefs._vpn._httpGet = async () => COUNTRY_IDS;
+            prefs.fillPreferencesWindow(createWindow());
+            await flush();
+            const row = rowTitled(Adw.ActionRow, 'gNordVPN, v7');
+            expect(row.subtitle).toBe('<a href="https://example.com/repo">https://example.com/repo</a>');
+        });
 
-            combo.set_active_id('left');
+        it('shows only the name when metadata has no version', async () => {
+            resetRegistry();
+            const prefs = new GnordVpnPrefs(new FakeSettings({}), {name: 'gNordVPN'});
+            prefs._vpn._procCom = createFakeProcCom({'nordvpn status': new Error('down'), 'nordvpn account': new Error('x'), 'nordvpn countries': COUNTRIES_OUT});
+            prefs._vpn._httpGet = async () => COUNTRY_IDS;
+            prefs.fillPreferencesWindow(createWindow());
+            await flush();
+            expect(rowTitled(Adw.ActionRow, 'gNordVPN')).toBeTruthy();
+        });
+
+        it('shows the panel position setting and writes changes to panel-position', async () => {
+            const {settings} = await buildPrefs();
+            const combo = comboRow('Panel position');
+            expect(combo.model.strings).toEqual(['Left', 'Center', 'Right']);
+            expect(combo.selected).toBe(2);
+
+            combo.selected = 0;
             expect(settings.get_string('panel-position')).toBe('left');
-            combo.set_active_id('center');
+            combo.selected = 1;
             expect(settings.get_string('panel-position')).toBe('center');
         });
 
-        it('binds the common favorite switch both ways', async () => {
-            const {settings, grid} = await buildPrefs();
-            const sw = grid('Display a common favorite tab:').controlFor('Display a common favorite tab:');
-            expect(sw.active).toBe(false);
+        it.each([
+            ['Show a Favorites submenu', 'commonfavorite', false],
+            ['Show a Groups submenu', 'showgroups', true],
+            ['Write debug messages to the log', 'debug-logging', false],
+        ])('binds the "%s" switch to %s both ways', async (title, key, initial) => {
+            const {settings} = await buildPrefs();
+            const sw = switchRow(title);
+            expect(sw.active).toBe(initial);
 
-            sw.userSet(true);
-            expect(settings.get_boolean('commonfavorite')).toBe(true);
-            settings.set_boolean('commonfavorite', false);
-            expect(sw.active).toBe(false);
+            sw.active = !initial;
+            expect(settings.get_boolean(key)).toBe(!initial);
+            settings.set_boolean(key, initial);
+            expect(sw.active).toBe(initial);
         });
 
-        it('binds the debug logging switch both ways, off by default', async () => {
-            const {settings, grid} = await buildPrefs();
-            const label = 'Write debug messages to the log:';
-            const sw = grid(label).controlFor(label);
-            expect(sw.active).toBe(false);
+        it('binds the refresh interval spin row to refresh-timeout', async () => {
+            const {settings} = await buildPrefs();
+            const spin = rowTitled(Adw.SpinRow, 'Seconds between NordVPN status calls');
+            expect(spin.value).toBe(15);
 
-            sw.userSet(true);
-            expect(settings.get_boolean('debug-logging')).toBe(true);
-            settings.set_boolean('debug-logging', false);
-            expect(sw.active).toBe(false);
-        });
-
-        it('binds the refresh spinner adjustment to refresh-timeout', async () => {
-            const {settings, grid} = await buildPrefs();
-            const label = 'Seconds between NordVpn status calls (will take affect on restart)';
-            const spinner = grid(label).controlFor(label);
-            expect(spinner.get_adjustment().value).toBe(15);
-
-            spinner.get_adjustment().value = 30;
+            spin.value = 30;
             expect(settings.get_int('refresh-timeout')).toBe(30);
         });
 
@@ -96,14 +112,14 @@ describe('GnordVpnPrefs', () => {
             try {
                 const {settings} = await buildPrefs({settings: {
                     autoconnect: true, commonfavorite: true, showlogin: false, showlogout: true,
-                    firewall: true, protocol: 'TCP', technology: 'NORDLYNX',
+                    firewall: true, 'connection-protocol': 'openvpn_tcp', showgroups: false,
                     'number-cities-per-countries': 3, 'number-servers-per-countries': 4,
                 }});
                 buttonLabelled('Reset All Settings').click();
 
                 expect(spy).toHaveBeenCalledTimes(1);
-                for (const key of ['autoconnect', 'commonfavorite', 'showlogin', 'showlogout', 'firewall', 'protocol',
-                    'technology', 'number-cities-per-countries', 'number-servers-per-countries']) {
+                for (const key of ['autoconnect', 'commonfavorite', 'showgroups', 'showlogin', 'showlogout', 'firewall',
+                    'connection-protocol', 'number-cities-per-countries', 'number-servers-per-countries']) {
                     expect({key, value: settings.get_value(key).deep_unpack()})
                         .toEqual({key, value: settings.get_default_value(key).deep_unpack()});
                 }
@@ -115,14 +131,13 @@ describe('GnordVpnPrefs', () => {
 
     describe('Account page', () => {
         it('binds the show login and show logout switches to their keys', async () => {
-            const {settings, grid} = await buildPrefs();
-            const g = grid('Show login button in menu:');
-            const login = g.controlFor('Show login button in menu:');
-            const logout = g.controlFor('Show logout button in menu:');
+            const {settings} = await buildPrefs();
+            const login = switchRow('Show login button in menu');
+            const logout = switchRow('Show logout button in menu');
             expect([login.active, logout.active]).toEqual([true, false]);
 
-            login.userSet(false);
-            logout.userSet(true);
+            login.active = false;
+            logout.active = true;
             expect(settings.get_boolean('showlogin')).toBe(false);
             expect(settings.get_boolean('showlogout')).toBe(true);
             settings.set_boolean('showlogin', true);
@@ -141,11 +156,12 @@ describe('GnordVpnPrefs', () => {
         });
 
         it('logged in: only Logout is enabled and it calls Vpn.logoutVpn', async () => {
-            const {prefs, grid} = await buildPrefs({cli: {'nordvpn account': ACCOUNT_OUT}});
+            const {prefs} = await buildPrefs({cli: {'nordvpn account': ACCOUNT_OUT}});
             const loginSpy = jest.spyOn(prefs._vpn, 'loginVpn').mockResolvedValue();
             const logoutSpy = jest.spyOn(prefs._vpn, 'logoutVpn').mockResolvedValue();
 
-            expect(grid('Account email:').controlFor('Account email:').label).toBe('user@example.com');
+            expect(rowTitled(Adw.ActionRow, 'Email').subtitle).toBe('user@example.com');
+            expect(rowTitled(Adw.ActionRow, 'Status').subtitle).toBe('Active');
             buttonLabelled('Login').click();    // disabled: ignored
             expect(loginSpy).not.toHaveBeenCalled();
             buttonLabelled('Logout').click();
@@ -155,80 +171,87 @@ describe('GnordVpnPrefs', () => {
 
     describe('Connection page', () => {
         const SWITCHES = {
-            'Autoconnect to VPN on startup:': 'autoconnect',
-            'Enable CyberSec:': 'cybersec',
-            'Enable Firewall:': 'firewall',
-            'Enable Killswitch:': 'killswitch',
-            'Enable Obfuscate:': 'obfuscate',
-            'Enable Analyics (send anonymous usage to NordVpn):': 'analytics',
-            'Enable IPv6:': 'ipv6',
+            'Autoconnect to VPN on startup': 'autoconnect',
+            'Real-time protection': 'protection',
+            'Firewall': 'firewall',
+            'Killswitch': 'killswitch',
+            'LAN discovery': 'lan-discovery',
+            'Post-quantum encryption': 'post-quantum',
+            'Notifications': 'notify',
+            'Analytics': 'analytics',
         };
 
-        it.each(Object.entries(SWITCHES))('switch "%s" writes %s', async (label, key) => {
-            const {settings, grid} = await buildPrefs();
-            const sw = grid(label).controlFor(label);
-            expect(sw).toBeInstanceOf(Switch);
+        it.each(Object.entries(SWITCHES))('switch "%s" writes %s', async (title, key) => {
+            const {settings} = await buildPrefs();
+            const sw = switchRow(title);
             expect(sw.active).toBe(settings.get_boolean(key));
 
-            sw.userSet(true);
+            sw.active = true;
             expect(settings.get_boolean(key)).toBe(true);
-            sw.userSet(false);
+            sw.active = false;
             expect(settings.get_boolean(key)).toBe(false);
-            // and the other direction
             settings.set_boolean(key, true);
             expect(sw.active).toBe(true);
         });
 
-        it('technology combo writes OPENVPN / NORDLYNX', async () => {
-            const {prefs, settings} = await buildPrefs({settings: {technology: 'OPENVPN'}});
-            expect(prefs._techCbox.active).toBe(0);
-
-            prefs._techCbox.set_active(1);
-            expect(settings.get_string('technology')).toBe('NORDLYNX');
-            prefs._techCbox.set_active(0);
-            expect(settings.get_string('technology')).toBe('OPENVPN');
+        it('says changes are sent to NordVPN on Apply', async () => {
+            await buildPrefs();
+            const group = findAll(Adw.PreferencesGroup).find(g => g.description === 'Changes are sent to NordVPN when you press Apply.');
+            expect(group).toBeDefined();
         });
 
-        it('protocol combo writes UDP / TCP', async () => {
-            const {prefs, settings} = await buildPrefs();
-            expect(prefs._protoCbox.active).toBe(0);
-            prefs._protoCbox.set_active(1);
-            expect(settings.get_string('protocol')).toBe('TCP');
-            prefs._protoCbox.set_active(0);
-            expect(settings.get_string('protocol')).toBe('UDP');
+        it('removed settings have no row', async () => {
+            await buildPrefs();
+            for (const title of ['Technology', 'CyberSec', 'Obfuscate', 'IPv6']) {
+                expect(findAll(Adw.PreferencesGroup).flatMap(g => g.children).some(r => r.title === title)).toBe(false);
+            }
         });
 
-        it('a fresh install (schema defaults) shows OpenVPN', async () => {
-            const {prefs} = await buildPrefs();
-            expect(prefs._techCbox.active).toBe(0);
+        it('protocol row offers the four CLI protocols and writes the CLI value', async () => {
+            const {settings} = await buildPrefs();
+            const proto = comboRow('Protocol');
+            expect(proto.model.strings).toEqual(['NordLynx', 'OpenVPN (UDP)', 'OpenVPN (TCP)', 'NordWhisper']);
+            expect(proto.selected).toBe(0);
+
+            const values = ['nordlynx', 'openvpn_udp', 'openvpn_tcp', 'nordwhisper'];
+            for (const i of [1, 2, 3, 0]) {
+                proto.selected = i;
+                expect(settings.get_string('connection-protocol')).toBe(values[i]);
+            }
         });
 
-        it('OPENVPN enables obfuscate and protocol; NORDLYNX disables them', async () => {
-            const {prefs, grid} = await buildPrefs({settings: {technology: 'OPENVPN'}});
-            const obfuscate = grid('Enable Obfuscate:').controlFor('Enable Obfuscate:');
-            expect([obfuscate.sensitive, prefs._protoCbox.sensitive]).toEqual([true, true]);
-
-            prefs._techCbox.set_active(1);
-            expect([obfuscate.sensitive, prefs._protoCbox.sensitive]).toEqual([false, false]);
-            prefs._techCbox.set_active(0);
-            expect([obfuscate.sensitive, prefs._protoCbox.sensitive]).toEqual([true, true]);
+        it('a fresh install (schema defaults) shows NordLynx', async () => {
+            await buildPrefs();
+            expect(comboRow('Protocol').selected).toBe(0);
         });
 
-        it('starts with obfuscate and protocol disabled when technology is NORDLYNX', async () => {
-            const {prefs, grid} = await buildPrefs({settings: {technology: 'NORDLYNX'}});
-            expect(grid('Enable Obfuscate:').controlFor('Enable Obfuscate:').sensitive).toBe(false);
-            expect(prefs._protoCbox.sensitive).toBe(false);
+        it('post-quantum is sensitive only for NordLynx', async () => {
+            await buildPrefs();
+            const [pq, proto] = [switchRow('Post-quantum encryption'), comboRow('Protocol')];
+            expect(pq.sensitive).toBe(true);
+
+            proto.selected = 2;
+            expect(pq.sensitive).toBe(false);
+            proto.selected = 3;
+            expect(pq.sensitive).toBe(false);
+            proto.selected = 0;
+            expect(pq.sensitive).toBe(true);
         });
 
-        it('refreshes the combos from `nordvpn settings` after the async sync', async () => {
-            const {prefs, settings} = await buildPrefs({
-                settings: {technology: 'OPENVPN', protocol: 'UDP'},
-                cli: {'nordvpn status': 'Status: Disconnected', 'nordvpn settings': 'Technology: NORDLYNX\nProtocol: TCP\n'},
+        it('starts with post-quantum insensitive when the stored protocol is not NordLynx', async () => {
+            await buildPrefs({settings: {'connection-protocol': 'openvpn_udp'}});
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(false);
+        });
+
+        it('refreshes the protocol row from `nordvpn settings` after the async sync', async () => {
+            const {settings} = await buildPrefs({
+                settings: {'connection-protocol': 'openvpn_udp'},
+                cli: {'nordvpn status': 'Status: Disconnected', 'nordvpn settings': 'Protocol: NordLynx\nPost-quantum VPN: enabled\n'},
             });
-            expect(settings.get_string('technology')).toBe('NORDLYNX');
-            expect(prefs._techCbox.active).toBe(1);
-            expect(prefs._protoCbox.active).toBe(1);
-            expect(prefs._protoCbox.sensitive).toBe(false);
+            expect(settings.get_string('connection-protocol')).toBe('nordlynx');
+            expect(settings.get_boolean('post-quantum')).toBe(true);
+            expect(comboRow('Protocol').selected).toBe(0);
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(true);
         });
 
         it('Apply calls applySettingsToNord once and is disabled while it runs', async () => {
@@ -248,44 +271,39 @@ describe('GnordVpnPrefs', () => {
             expect(spy).toHaveBeenCalledTimes(1);
         });
 
-        it('Reset Connection Settings restores the schema defaults, ending on OPENVPN', async () => {
-            const {prefs, settings} = await buildPrefs({settings: {
-                cybersec: true, firewall: true, killswitch: true, obfuscate: true, notify: true, ipv6: true,
-                protocol: 'TCP', technology: 'NORDLYNX',
+        it('Reset Connection Settings restores the schema defaults, ending on NordLynx', async () => {
+            const {settings} = await buildPrefs({settings: {
+                protection: true, firewall: true, killswitch: true, notify: true, 'lan-discovery': true, 'post-quantum': true,
+                'connection-protocol': 'openvpn_tcp',
             }});
             buttonLabelled('Reset Connection Settings').click();
 
-            for (const key of ['cybersec', 'firewall', 'killswitch', 'obfuscate', 'notify', 'ipv6', 'protocol']) {
+            for (const key of ['protection', 'firewall', 'killswitch', 'notify', 'lan-discovery', 'post-quantum', 'connection-protocol']) {
                 expect({key, value: settings.get_value(key).deep_unpack()})
                     .toEqual({key, value: settings.get_default_value(key).deep_unpack()});
             }
-            expect(settings.get_string('technology')).toBe('OPENVPN');
-            expect(prefs._techCbox.active).toBe(0);
-            expect(prefs._protoCbox.active).toBe(0);
-            expect(prefs._protoCbox.sensitive).toBe(true);
+            expect(comboRow('Protocol').selected).toBe(0);
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(true);
         });
     });
 
     describe('Cities and Servers pages', () => {
-        const treeViews = () => {
-            const [cities, servers] = findAll(TreeView);
-            return {cities, servers};
-        };
-        const rowOf = (view, name) => view.get_model().rows.findIndex(r => r[0] === name);
-        const selectedNames = (view) => view.get_selection().selectedRows().map(i => view.get_model().rows[i][0]);
+        const pickerRows = (picker) => picker.group.children;
+        const checked = (picker) => pickerRows(picker).filter(r => r.children[0].active).map(r => r.title);
+        const check = (picker, title) => pickerRows(picker).find(r => r.title === title).children.find(c => c instanceof CheckButton);
 
-        it('populates both lists from the CLI countries and selects the saved ones', async () => {
-            await buildPrefs({settings: {
+        it('populates both pickers from the CLI countries and checks the saved ones first', async () => {
+            const {prefs} = await buildPrefs({settings: {
                 'countries-selected-for-cities': ['Germany', 'United_States'],
                 'countries-selected-for-servers': [74],
             }});
-            const {cities, servers} = treeViews();
-            expect(cities.get_model().rows.map(r => r[0])).toEqual(['Canada', 'France', 'Germany', 'Japan', 'United States']);
-            expect(selectedNames(cities)).toEqual(['Germany', 'United States']);
-            expect(selectedNames(servers)).toEqual(['France']);
+            expect(pickerRows(prefs._cityPicker).map(r => r.title)).toEqual(['Germany', 'United States', 'Canada', 'France', 'Japan']);
+            expect(checked(prefs._cityPicker)).toEqual(['Germany', 'United States']);
+            expect(pickerRows(prefs._serverPicker).map(r => r.title)).toEqual(['France', 'Canada', 'Germany', 'Japan', 'United States']);
+            expect(checked(prefs._serverPicker)).toEqual(['France']);
         });
 
-        it('does not write settings while the lists are being populated', async () => {
+        it('does not write settings while the pickers are being populated', async () => {
             const fake = new FakeSettings({
                 'countries-selected-for-cities': ['Germany'],
                 'countries-selected-for-servers': [74],
@@ -302,54 +320,46 @@ describe('GnordVpnPrefs', () => {
             expect(touched).not.toContain('countries-selected-for-servers');
         });
 
-        it('writes countries-selected-for-cities when the selection changes', async () => {
-            const {settings} = await buildPrefs();
-            const {cities} = treeViews();
-            const sel = cities.get_selection();
-
-            sel.select_iter({row: rowOf(cities, 'Canada')});
-            sel.select_iter({row: rowOf(cities, 'United States')});
+        it('writes countries-selected-for-cities when a country is toggled', async () => {
+            const {prefs, settings} = await buildPrefs();
+            check(prefs._cityPicker, 'Canada').userSet(true);
+            check(prefs._cityPicker, 'United States').userSet(true);
             expect(settings.get_value('countries-selected-for-cities').deep_unpack()).toEqual(['Canada', 'United_States']);
 
-            sel.unselect_all();
+            check(prefs._cityPicker, 'Canada').userSet(false);
+            check(prefs._cityPicker, 'United States').userSet(false);
             expect(settings.get_value('countries-selected-for-cities').deep_unpack()).toEqual([]);
         });
 
-        it('writes countries-selected-for-servers (country ids) when the selection changes', async () => {
-            const {settings} = await buildPrefs();
-            const {servers} = treeViews();
-            const sel = servers.get_selection();
-
-            sel.select_iter({row: rowOf(servers, 'Germany')});
-            sel.select_iter({row: rowOf(servers, 'Japan')});
+        it('writes countries-selected-for-servers (country ids) when a country is toggled', async () => {
+            const {prefs, settings} = await buildPrefs();
+            check(prefs._serverPicker, 'Germany').userSet(true);
+            check(prefs._serverPicker, 'Japan').userSet(true);
             expect(settings.get_value('countries-selected-for-servers').deep_unpack()).toEqual([81, 108]);
         });
 
-        it('suppresses writes while a list is being populated', async () => {
-            const {prefs, settings} = await buildPrefs();
-            const {cities, servers} = treeViews();
-
-            prefs._cityTree.populating = true;
-            prefs._serverTree.populating = true;
-            cities.get_selection().select_iter({row: 0});
-            servers.get_selection().select_iter({row: 0});
-            expect(settings.writes).toEqual([]);
-
-            prefs._cityTree.populating = false;
-            cities.get_selection().select_iter({row: 1});
-            expect(settings.writes.map(([k]) => k)).toEqual(['countries-selected-for-cities']);
+        it('shows the failed state when the country list cannot be read', async () => {
+            const {prefs} = await buildPrefs({cli: {'nordvpn countries': new Error('down')}});
+            expect(pickerRows(prefs._cityPicker).map(r => r.title)).toEqual(['Couldn’t load countries — is nordvpnd running?']);
         });
 
-        it('binds the max cities / servers spinners to their keys', async () => {
-            const {settings, grid} = await buildPrefs();
-            const cities = grid('Max cities per country displayed:').controlFor('Max cities per country displayed:');
-            const servers = grid('Max servers per country displayed:').controlFor('Max servers per country displayed:');
+        it('binds the max cities / servers spin rows to their keys', async () => {
+            const {settings} = await buildPrefs();
+            const cities = findAll(Adw.SpinRow).find(r => r.title === 'Max cities per country');
+            const servers = findAll(Adw.SpinRow).find(r => r.title === 'Max servers per country');
             expect([cities.value, servers.value]).toEqual([10, 10]);
 
-            cities.set_value(25);
-            servers.set_value(7);
+            cities.value = 25;
+            servers.value = 7;
             expect(settings.get_int('number-cities-per-countries')).toBe(25);
             expect(settings.get_int('number-servers-per-countries')).toBe(7);
+        });
+
+        it('Reset All Settings re-syncs the pickers with the defaults', async () => {
+            const {prefs} = await buildPrefs({settings: {'countries-selected-for-cities': ['Japan']}});
+            expect(checked(prefs._cityPicker)).toEqual(['Japan']);
+            buttonLabelled('Reset All Settings').click();
+            expect(checked(prefs._cityPicker)).toEqual([]);
         });
     });
 });
@@ -361,7 +371,7 @@ describe('closing the preferences window', () => {
     function openWindow({holdCountries} = {}) {
         resetRegistry();
         const fake = new FakeSettings({});
-        const prefs = new GnordVpnPrefs(fake, {name: 'gNordVpn-Local', version: '1'});
+        const prefs = new GnordVpnPrefs(fake, {name: 'gNordVPN', version: '1'});
         const calls = [];
         prefs._vpn._procCom = {
             calls,
@@ -379,14 +389,14 @@ describe('closing the preferences window', () => {
         return {prefs, window, calls};
     }
 
-    it('cancels the pending reads and leaves the country lists unpopulated', async () => {
+    it('cancels the pending reads and leaves the country pickers loading', async () => {
         let release;
         const {prefs, window} = openWindow({holdCountries: new Promise(r => { release = r; })});
         window.emit('destroy');
         expect(prefs._vpn._cancellable.is_cancelled()).toBe(true);
         release();
         await flush();
-        expect(prefs._countryNames).toEqual([]);   // still the empty list set before the fetch
+        expect(prefs._cityPicker.group.children.map(r => r.title)).toEqual(['Loading countries…']);
     });
 
     it('still runs Apply after the window closed, because its commands are never cancelled', async () => {

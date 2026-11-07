@@ -191,6 +191,7 @@ describe('VpnIndicator uptime clock', () => {
         indicator._countryMenu.destroy = jest.fn();
         indicator._cityMenu.destroy = jest.fn();
         indicator._serverMenu.destroy = jest.fn();
+        indicator._groupMenu.destroy = jest.fn();
         indicator._signals = {disconnectAll: jest.fn()};
         indicator.destroy();
         expect(timers.removed).toContain(id);

@@ -77,19 +77,37 @@ describe('VpnUtils', () => {
         });
     });
 
+    describe('resolveProtocolValue', () => {
+        it.each([
+            ['OpenVPN (UDP)', 'openvpn_udp'],
+            [' openvpn (tcp) ', 'openvpn_tcp'],
+            ['NordWhisper', 'nordwhisper'],
+        ])('maps %s to %s', (label, value) => {
+            expect(vpnUtils.resolveProtocolValue(label)).toBe(value);
+        });
+
+        it('maps the printed NordLynx label to the CLI value', () => {
+            expect(vpnUtils.resolveProtocolValue(' NordLynx ')).toBe('nordlynx');
+        });
+
+        it('leaves unverified labels unmapped', () => {
+            expect(vpnUtils.resolveProtocolValue('OpenVPN')).toBeUndefined();
+            expect(vpnUtils.resolveProtocolValue('UDP')).toBeUndefined();
+            expect(vpnUtils.resolveProtocolValue('')).toBeUndefined();
+        });
+    });
+
     describe('resolveSettingsKey', () => {
         it.each([
             ['firewall', 'firewall'],
-            ['Technology', 'technology'],
-            ['Current Technology', 'technology'],
-            ['protocol', 'protocol'],
+            ['protocol', 'connection-protocol'],
             ['Kill Switch', 'killswitch'],
             ['analytics', 'analytics'],
-            ['Threat Protection Lite', 'cybersec'],
-            ['obfuscate', 'obfuscate'],
+            ['Real-time protection', 'protection'],
+            ['LAN Discovery', 'lan-discovery'],
+            ['Post-quantum VPN', 'post-quantum'],
             ['notify', 'notify'],
             ['Auto-connect', 'autoconnect'],
-            ['IPv6', 'ipv6'],
         ])('maps %p to %p', (input, expected) => {
             expect(vpnUtils.resolveSettingsKey(input)).toBe(expected);
         });
@@ -97,6 +115,8 @@ describe('VpnUtils', () => {
         it('returns null for unsupported keys (e.g. dns)', () => {
             expect(vpnUtils.resolveSettingsKey('unknown setting')).toBeNull();
             expect(vpnUtils.resolveSettingsKey('DNS')).toBeNull();
+            expect(vpnUtils.resolveSettingsKey('IPv6')).toBeNull();
+            expect(vpnUtils.resolveSettingsKey('Technology')).toBeNull();
         });
 
         it('returns undefined for empty input', () => {

@@ -24,16 +24,26 @@ export default class VpnUtils {
         const normalizedText = text.trim().toLowerCase();
 
         if (normalizedText === `firewall`) return `firewall`;
-        if (normalizedText.includes(`tech`)) return `technology`;
-        if (normalizedText === `protocol`) return `protocol`;
+        if (normalizedText === `protocol`) return `connection-protocol`;
         if (normalizedText === `kill switch`) return `killswitch`;
         if (normalizedText === `analytics`) return `analytics`;
-        if (normalizedText === `threat protection lite`) return `cybersec`;
-        if (normalizedText === `obfuscate`) return `obfuscate`;
+        if (normalizedText === `real-time protection`) return `protection`;
         if (normalizedText === `notify`) return `notify`;
         if (normalizedText === `auto-connect`) return `autoconnect`;
-        if (normalizedText === `ipv6`) return `ipv6`;
+        if (normalizedText === `lan discovery`) return `lan-discovery`;
+        if (normalizedText === `post-quantum vpn`) return `post-quantum`;
 
         return null;
+    }
+
+    // Labels as printed by `nordvpn settings`; NordWhisper is inferred from the CLI's protocol name.
+    resolveProtocolValue(text) {
+        if (!text) return;
+        switch (text.trim().toLowerCase()) {
+            case `nordlynx`: return `nordlynx`;
+            case `openvpn (udp)`: return `openvpn_udp`;
+            case `openvpn (tcp)`: return `openvpn_tcp`;
+            case `nordwhisper`: return `nordwhisper`;
+        }
     }
 }

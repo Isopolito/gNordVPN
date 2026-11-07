@@ -18,8 +18,10 @@
 - 🖥️ **Top-bar control**: Connect, disconnect, and inspect NordVPN status from the GNOME panel.
 - 📡 **Live status display**: See connection state, country, and server details at a glance.
 - 🌍 **Fast server selection**: Browse and connect by country, city, or server.
-- ⭐ **Favorites**: Pin commonly used countries, cities, and servers for quicker access.
-- ⚙️ **Connection preferences**: Configure options such as auto-connect, protocol, and technology from the extension settings.
+- 🧩 **Server groups**: Connect to server groups such as Double VPN or Onion Over VPN, with favorites.
+- ⭐ **Favorites**: Pin commonly used countries, cities, servers, and groups for quicker access.
+- ✅ **Searchable country lists**: The Cities and Servers pages use a searchable checklist, so no modifier keys are needed to select several countries.
+- ⚙️ **Connection preferences**: Configure options such as auto-connect, protocol, real-time protection, LAN discovery, post-quantum encryption, and notifications from the extension settings.
 - 🧭 **Panel customization**: Move the indicator to the left, center, or right side of the top bar.
 - 🎨 **Style overrides**: A Styles page with a live preview, Size and Theme presets, Shape controls (corners, bold, border, spacing), and per-state colors and panel text. An Advanced CSS section is the fallback for anything the controls don't cover.
 
@@ -33,7 +35,7 @@ This extension uses the NordVPN command line client, which can be set up as foll
 
 ### Install the extension
 #### Easiest way: 
-Enable on gnome-extensions at [gNordVPN Local on gnome extensions](https://extensions.gnome.org/extension/2569/gnordvpn-local/)
+Enable on gnome-extensions at [gNordVPN on gnome extensions](https://extensions.gnome.org/extension/2569/gnordvpn-local/)
 
 #### Manual install:
 1. Create a folder for the extension with `mkdir ~/.local/share/gnome-shell/extensions/gnordvpn-local@isopolito`

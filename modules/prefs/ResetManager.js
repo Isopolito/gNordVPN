@@ -1,49 +1,36 @@
+import {PROTOCOLS} from '../constants.js';
+
 export default class ResetManager {
-    resetAllSettings(settings, protoCbox, techCbox, cityTreeView, cityTreeIterMap, serverTreeView, serverTreeIterMap) {
+    resetAllSettings(settings, protoRow, cityPicker, serverPicker) {
         this._resetGeneralSetting(settings);
         this._resetAccountSetting(settings);
-        this.resetConnectionSettings(settings, protoCbox, techCbox);
-        this._resetCitySetting(settings, cityTreeView, cityTreeIterMap);
-        this.resetServerSetting(settings, serverTreeView, serverTreeIterMap);
+        this.resetConnectionSettings(settings, protoRow);
+        this._resetCitySetting(settings, cityPicker);
+        this.resetServerSetting(settings, serverPicker);
     }
-    resetConnectionSettings(settings, protoCbox, techCbox) {
-        this._resetSetting(settings, ['cybersec', 'firewall', 'killswitch', 'obfuscate', 'notify', 'ipv6', 'protocol', 'technology']);
+    resetConnectionSettings(settings, protoRow) {
+        this._resetSetting(settings, ['protection', 'firewall', 'killswitch', 'notify', 'lan-discovery', 'post-quantum', 'connection-protocol']);
 
-        const protocol = settings.get_string(`protocol`);
-        protoCbox.set_active(protocol === 'UDP' ? 0 : 1);
-
-        const tech = settings.get_string(`technology`);
-        techCbox.set_active(tech === 'OPENVPN' ? 0 : 1);
+        const protocol = settings.get_string(`connection-protocol`);
+        protoRow.selected = Math.max(0, PROTOCOLS.findIndex(([value]) => value === protocol));
     }
 
     _resetGeneralSetting(settings) {
-        this._resetSetting(settings, ['autoconnect', 'commonfavorite']);
+        this._resetSetting(settings, ['autoconnect', 'commonfavorite', 'showgroups']);
     }
 
     _resetAccountSetting(settings) {
         this._resetSetting(settings, ['showlogin', 'showlogout']);
     }
 
-    _resetCitySetting(settings, cityTreeView, cityTreeIterMap) {
+    _resetCitySetting(settings, cityPicker) {
         this._resetSetting(settings, ['number-cities-per-countries', 'countries-selected-for-cities']);
-
-        const cityCountries = settings.get_value('countries-selected-for-cities').deep_unpack();
-
-        cityTreeView.get_selection().unselect_all();
-        cityCountries.forEach(country => {
-            cityTreeView.get_selection().select_iter(cityTreeIterMap[country.replace(/_/g, " ")]);
-        });
+        cityPicker.refresh();
     }
 
-    resetServerSetting(settings, serverTreeView, serverTreeIterMap) {
+    resetServerSetting(settings, serverPicker) {
         this._resetSetting(settings, ['number-servers-per-countries', 'countries-selected-for-servers']);
-
-        const serverCountries = settings.get_value('countries-selected-for-servers').deep_unpack();
-
-        serverTreeView.get_selection().unselect_all();
-        serverCountries.forEach(server => {
-            serverTreeView.get_selection().select_iter(serverTreeIterMap[server.replace(/_/g, " ")]);
-        });
+        serverPicker.refresh();
     }
 
     _resetSetting(settings, keys) {

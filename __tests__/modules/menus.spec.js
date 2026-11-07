@@ -271,6 +271,56 @@ describe('ConnectionMenu', () => {
         });
     });
 
+    describe('groups', () => {
+        const GROUP_KEY = Constants.favorites.favoriteGroups;
+
+        function createGroupMenu(favorites = {}) {
+            const settings = createFakeSettings({[GROUP_KEY]: JSON.stringify(favorites)});
+            const callback = jest.fn();
+            const menu = new ConnectionMenu('Groups', 'groups', GROUP_KEY, callback, settings);
+            menu._vpn = fakeVpn({'Double VPN': 'Double_VPN', 'Onion Over VPN': 'Onion_Over_VPN'});
+            return {menu, settings, callback};
+        }
+
+        it('builds from the groups connection list with favorites first', async () => {
+            const {menu} = createGroupMenu({'Onion Over VPN': 'Onion_Over_VPN'});
+            await menu.tryBuild(true);
+            expect(labels(menu.menu)).toEqual(['Onion Over VPN', null, 'Double VPN']);
+            expect(menu._vpn.getConnectionList).toHaveBeenCalledWith('groups', true);
+        });
+
+        it('connects with the raw group name', async () => {
+            const {menu, callback} = createGroupMenu();
+            await menu.tryBuild(true);
+            menu.menu.menu.items.find(i => i.label === 'Double VPN').emit('activate');
+            expect(menu._vpn.connectVpn).toHaveBeenCalledWith('Double_VPN');
+            expect(callback).toHaveBeenCalledWith(Constants.status.reconnecting, ['groups', 'Double_VPN']);
+        });
+
+        it('ignores updateFavorite during a rebuild and reflects the latest favorites once built', async () => {
+            const {menu, settings} = createGroupMenu({'Double VPN': 'Double_VPN', 'Onion Over VPN': 'Onion_Over_VPN'});
+            await menu.tryBuild(true);
+            expect(menu.isBuilt).toBe(true);
+            menu.rebuild(true);
+            settings.values[GROUP_KEY] = JSON.stringify({'Onion Over VPN': 'Onion_Over_VPN'});
+            expect(() => menu.updateFavorite()).not.toThrow();
+            runIdle();
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(menu.isBuilt).toBe(true);
+            expect(labels(menu.menu)).toEqual(['Onion Over VPN', null, 'Double VPN']);
+        });
+
+        it('writes favorite-groups when a group is starred', async () => {
+            const {menu, settings} = createGroupMenu();
+            await menu.tryBuild(true);
+            press(menu.menu.menu.items.find(i => i.label === 'Double VPN'));
+            runIdle();
+            expect(JSON.parse(settings.values[GROUP_KEY])).toEqual({'Double VPN': 'Double_VPN'});
+        });
+    });
+
     describe('activating an item', () => {
         it('connects to the target and calls overrideRefresh with the overrideKeys', async () => {
             const {menu, callback} = createMenu();
@@ -416,6 +466,7 @@ describe('CommonFavorite', () => {
             [Constants.favorites.favoriteCountries]: '{}',
             [Constants.favorites.favoriteCities]: '{}',
             [Constants.favorites.favoriteServers]: '{}',
+            [Constants.favorites.favoriteGroups]: '{}',
         });
         Object.entries(stored).forEach(([k, v]) => { settings.values[k] = JSON.stringify(v); });
         const callback = jest.fn();
@@ -449,6 +500,17 @@ describe('CommonFavorite', () => {
         expect(labels(common.menu)).toEqual(['Albania', 'Zambia', 'US, Miami', 'Germany #1']);
         expect(common.favList.Albania).toEqual({item: 'Albania', type: 'favorite-countries'});
         expect(common.isBuilt).toBe(true);
+    });
+
+    it('lists group favorites after countries, cities and servers', () => {
+        const {common} = createCommon({
+            'favorite-groups': {'Double VPN': 'Double_VPN'},
+            'favorite-servers': {'Germany #1': 'de1'},
+            'favorite-countries': {Albania: 'Albania'},
+        });
+        common.build();
+        expect(labels(common.menu)).toEqual(['Albania', 'Germany #1', 'Double VPN']);
+        expect(common.favList['Double VPN']).toEqual({item: 'Double_VPN', type: 'favorite-groups'});
     });
 
     it('hides itself when there are no favorites and shows when there are', () => {

@@ -6,14 +6,13 @@ const DEFAULTS = {
     'commonfavorite': true,
     'showlogin': true,
     'showlogout': true,
-    'cybersec': false,
+    'protection': false,
     'firewall': true,
     'killswitch': false,
-    'obfuscate': false,
     'notify': true,
-    'ipv6': false,
-    'protocol': 'UDP',
-    'technology': 'NORDLYNX',
+    'lan-discovery': false,
+    'post-quantum': false,
+    'connection-protocol': 'nordlynx',
     'number-cities-per-countries': 5,
     'countries-selected-for-cities': ['United_States', 'Germany'],
     'number-servers-per-countries': 5,
@@ -34,12 +33,9 @@ function createSettings(overrides = {}) {
     };
 }
 
-function createTreeView() {
-    const selection = {unselect_all: jest.fn(), select_iter: jest.fn()};
-    return {selection, get_selection: () => selection};
-}
+const createPicker = () => ({refresh: jest.fn()});
 
-const createCbox = () => ({set_active: jest.fn()});
+const createRow = () => ({selected: -1});
 
 describe('ResetManager', () => {
     let manager;
@@ -47,66 +43,56 @@ describe('ResetManager', () => {
 
     describe('resetConnectionSettings', () => {
         it('resets connection keys to their defaults', () => {
-            const settings = createSettings({firewall: false, killswitch: true, ipv6: true, protocol: 'TCP', technology: 'OPENVPN'});
-            manager.resetConnectionSettings(settings, createCbox(), createCbox());
-            expect(settings.values).toMatchObject({firewall: true, killswitch: false, ipv6: false, protocol: 'UDP', technology: 'NORDLYNX'});
+            const settings = createSettings({
+                firewall: false, killswitch: true, protection: true, 'lan-discovery': true, 'post-quantum': true,
+                notify: false, 'connection-protocol': 'openvpn_tcp',
+            });
+            manager.resetConnectionSettings(settings, createRow());
+            expect(settings.values).toMatchObject({
+                firewall: true, killswitch: false, protection: false, 'lan-discovery': false, 'post-quantum': false,
+                notify: true, 'connection-protocol': 'nordlynx',
+            });
         });
 
-        it('restores the combo boxes: UDP is index 0, anything else is 1', () => {
-            const settings = createSettings({protocol: 'TCP', technology: 'OPENVPN'});
-            const proto = createCbox();
-            const tech = createCbox();
-            manager.resetConnectionSettings(settings, proto, tech);
-            // defaults are UDP + NORDLYNX
-            expect(proto.set_active).toHaveBeenCalledWith(0);
-            expect(tech.set_active).toHaveBeenCalledWith(1);
+        it('restores the combo row to the index of the default protocol', () => {
+            const settings = createSettings({'connection-protocol': 'openvpn_tcp'});
+            const proto = createRow();
+            manager.resetConnectionSettings(settings, proto);
+            expect(proto.selected).toBe(0);
         });
 
-        it('sets the technology combo to 0 when the default technology is OPENVPN', () => {
+        it('selects the matching index when the default protocol is not the first entry', () => {
             const settings = createSettings();
-            settings.get_default_value.mockImplementation((key) => variant(key === 'technology' ? 'OPENVPN' : DEFAULTS[key]));
-            const proto = createCbox();
-            const tech = createCbox();
-            manager.resetConnectionSettings(settings, proto, tech);
-            expect(tech.set_active).toHaveBeenCalledWith(0);
-        });
-
-        it('sets the protocol combo to 1 when the default protocol is TCP', () => {
-            const settings = createSettings();
-            settings.get_default_value.mockImplementation((key) => variant(key === 'protocol' ? 'TCP' : DEFAULTS[key]));
-            const proto = createCbox();
-            manager.resetConnectionSettings(settings, proto, createCbox());
-            expect(proto.set_active).toHaveBeenCalledWith(1);
+            settings.get_default_value.mockImplementation((key) => variant(key === 'connection-protocol' ? 'openvpn_tcp' : DEFAULTS[key]));
+            const proto = createRow();
+            manager.resetConnectionSettings(settings, proto);
+            expect(proto.selected).toBe(2);
         });
     });
 
     describe('_resetCitySetting', () => {
-        it('resets the city keys and reselects the default countries (regression: used this.settings)', () => {
+        it('resets the city keys and refreshes the picker (regression: used this.settings)', () => {
             const settings = createSettings({'number-cities-per-countries': 9, 'countries-selected-for-cities': ['Spain']});
-            const tree = createTreeView();
-            const iterMap = {'United States': 'iterUS', 'Germany': 'iterDE', 'Spain': 'iterES'};
+            const picker = createPicker();
 
-            manager._resetCitySetting(settings, tree, iterMap);
+            manager._resetCitySetting(settings, picker);
 
             expect(settings.values['number-cities-per-countries']).toBe(5);
             expect(settings.values['countries-selected-for-cities']).toEqual(['United_States', 'Germany']);
-            expect(tree.selection.unselect_all).toHaveBeenCalledTimes(1);
-            // underscores in the stored name map to spaces in the iter map
-            expect(tree.selection.select_iter.mock.calls.map(c => c[0])).toEqual(['iterUS', 'iterDE']);
+            expect(picker.refresh).toHaveBeenCalledTimes(1);
         });
     });
 
     describe('resetServerSetting', () => {
-        it('resets the server keys and reselects the default countries (regression: used this.settings)', () => {
+        it('resets the server keys and refreshes the picker (regression: used this.settings)', () => {
             const settings = createSettings({'number-servers-per-countries': 1, 'countries-selected-for-servers': ['Spain']});
-            const tree = createTreeView();
+            const picker = createPicker();
 
-            manager.resetServerSetting(settings, tree, {France: 'iterFR', Spain: 'iterES'});
+            manager.resetServerSetting(settings, picker);
 
             expect(settings.values['number-servers-per-countries']).toBe(5);
             expect(settings.values['countries-selected-for-servers']).toEqual(['France']);
-            expect(tree.selection.unselect_all).toHaveBeenCalledTimes(1);
-            expect(tree.selection.select_iter.mock.calls.map(c => c[0])).toEqual(['iterFR']);
+            expect(picker.refresh).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -117,15 +103,14 @@ describe('ResetManager', () => {
                 firewall: false, 'number-cities-per-countries': 9, 'number-servers-per-countries': 9,
                 'countries-selected-for-cities': ['Spain'], 'countries-selected-for-servers': ['Spain'],
             });
-            const cityTree = createTreeView();
-            const serverTree = createTreeView();
+            const cityPicker = createPicker();
+            const serverPicker = createPicker();
 
-            manager.resetAllSettings(settings, createCbox(), createCbox(), cityTree,
-                {'United States': 'a', 'Germany': 'b'}, serverTree, {France: 'c'});
+            manager.resetAllSettings(settings, createRow(), cityPicker, serverPicker);
 
             expect(settings.values).toMatchObject(DEFAULTS);
-            expect(cityTree.selection.select_iter).toHaveBeenCalledTimes(2);
-            expect(serverTree.selection.select_iter).toHaveBeenCalledTimes(1);
+            expect(cityPicker.refresh).toHaveBeenCalledTimes(1);
+            expect(serverPicker.refresh).toHaveBeenCalledTimes(1);
         });
     });
 });

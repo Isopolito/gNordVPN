@@ -14,6 +14,7 @@ export function installMenuFakes(indicator) {
     indicator._disconnectMenuItem = {};
     indicator._loginMenuItem = {};
     indicator._logoutMenuItem = {};
+    indicator._groupMenu = {tryBuild: jest.fn(async () => {}), showHide: jest.fn(), rebuild: jest.fn(), updateFavorite: jest.fn(), destroy: jest.fn()};
     indicator._commonFavorite = {showHide: jest.fn()};
     indicator._extSettings.get_boolean = () => false;
 }

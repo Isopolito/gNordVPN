@@ -366,6 +366,95 @@ describe('VpnIndicator._refresh', () => {
         });
     });
 
+    describe('groups menu', () => {
+        const withSettings = (indicator, settings) => {
+            const handlers = [];
+            indicator._extSettings.get_boolean = (k) => settings[k];
+            indicator._extSettings.connect = (_, cb) => { handlers.push(cb); return 1; };
+            indicator._connectChanged();
+            return (_, key) => handlers[0](indicator._extSettings, key);
+        };
+
+        it.each([
+            [true, true, true],
+            [false, true, false],
+            [true, false, false],
+        ])('showgroups=%p showLists=%p shows the menu: %p', async (showgroups, showLists, shown) => {
+            const indicator = createIndicator({status: makeStatus(showLists ? Constants.states.CONNECTED : 'N/A', {running: showLists})});
+            indicator._extSettings.get_boolean = (k) => k === 'showgroups' && showgroups;
+            if (!showLists) indicator._stateManager.states[Constants.states.ERROR].showLists = false;
+            await indicator._refresh();
+            expect(indicator._groupMenu.showHide).toHaveBeenLastCalledWith(shown);
+        });
+
+        it('toggles live when showgroups changes', async () => {
+            const indicator = createIndicator({status: makeStatus(Constants.states.CONNECTED)});
+            const settings = {showgroups: true};
+            const handler = withSettings(indicator, settings);
+            await indicator._refresh();
+            settings.showgroups = false;
+            handler({}, 'showgroups');
+            expect(indicator._groupMenu.showHide).toHaveBeenLastCalledWith(false);
+            settings.showgroups = true;
+            handler({}, 'showgroups');
+            expect(indicator._groupMenu.showHide).toHaveBeenLastCalledWith(true);
+        });
+
+        it('stays hidden when showgroups changes before the first status', () => {
+            const indicator = createIndicator();
+            withSettings(indicator, {showgroups: true})({}, 'showgroups');
+            expect(indicator._groupMenu.showHide).toHaveBeenLastCalledWith(false);
+        });
+
+        it.each(['tryBuild', 'rebuild'])('keeps groups hidden when a %s finishing after the hide shows it', async (kind) => {
+            const indicator = createIndicator({status: makeStatus(Constants.states.CONNECTED)});
+            indicator._extSettings.get_boolean = () => false;
+            const menu = indicator._groupMenu;
+            let shown = true;
+            menu.showHide = jest.fn(v => { shown = v; });
+            // Mirrors ConnectionMenu: a finished build shows the menu, then notifies the owner.
+            const finishBuild = () => { shown = true; menu.onBuilt?.(); };
+            menu.onBuilt = () => indicator._applyGroupsVisibility();
+            let release;
+            const pending = new Promise(r => { release = r; }).then(finishBuild);
+            menu.tryBuild = jest.fn(() => pending);
+            menu.rebuild = jest.fn(() => { pending.catch(() => {}); });
+            await indicator._refresh();
+            if (kind === 'rebuild') indicator._onMenuOpenChanged(true);
+            expect(shown).toBe(false);
+            release();
+            await pending;
+            expect(shown).toBe(false);
+        });
+
+        it('updates favorites when favorite-groups changes', () => {
+            const indicator = createIndicator();
+            indicator._commonFavorite.updateFavorite = jest.fn();
+            withSettings(indicator, {})({}, 'favorite-groups');
+            expect(indicator._groupMenu.updateFavorite).toHaveBeenCalledTimes(1);
+            expect(indicator._commonFavorite.updateFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('rebuilds only the groups menu when the menu opens while running', async () => {
+            const indicator = createIndicator({status: makeStatus(Constants.states.CONNECTED)});
+            [indicator._countryMenu, indicator._cityMenu, indicator._serverMenu].forEach(m => { m.rebuild = jest.fn(); });
+            await indicator._refresh();
+            indicator._onMenuOpenChanged(true);
+            expect(indicator._groupMenu.rebuild).toHaveBeenCalledWith(true);
+            [indicator._countryMenu, indicator._cityMenu, indicator._serverMenu].forEach(m => expect(m.rebuild).not.toHaveBeenCalled());
+        });
+
+        it('does not rebuild on close or while the daemon is not running', async () => {
+            const indicator = createIndicator({status: makeStatus('N/A', {running: false})});
+            await indicator._refresh();
+            indicator._onMenuOpenChanged(true);
+            expect(indicator._groupMenu.rebuild).not.toHaveBeenCalled();
+            indicator._lastKnownRunning = true;
+            indicator._onMenuOpenChanged(false);
+            expect(indicator._groupMenu.rebuild).not.toHaveBeenCalled();
+        });
+    });
+
     describe('failure backoff', () => {
         it('adds 5s, then doubles up to a 60s cap, on consecutive failures', async () => {
             const indicator = createIndicator();
@@ -405,12 +494,13 @@ describe('VpnIndicator._refresh', () => {
     });
 
     describe('throttled menu build', () => {
-        it('builds the three menus on the first successful refresh', async () => {
+        it('builds the four menus on the first successful refresh', async () => {
             const indicator = createIndicator();
             await indicator._refresh();
             expect(indicator._countryMenu.tryBuild).toHaveBeenCalledWith(true);
             expect(indicator._cityMenu.tryBuild).toHaveBeenCalledWith(true);
             expect(indicator._serverMenu.tryBuild).toHaveBeenCalledWith(true);
+            expect(indicator._groupMenu.tryBuild).toHaveBeenCalledWith(true);
         });
 
         it('does not rebuild within the 30s window', async () => {
@@ -438,7 +528,7 @@ describe('VpnIndicator.destroy', () => {
         const indicator = createIndicator();
         const order = [];
         indicator._vpn.destroy = jest.fn(() => order.push(indicator._cancellable.is_cancelled() ? 'vpn-after-cancel' : 'vpn-before-cancel'));
-        ['_countryMenu', '_cityMenu', '_serverMenu'].forEach(k => { indicator[k].destroy = jest.fn(); });
+        ['_countryMenu', '_cityMenu', '_serverMenu', '_groupMenu'].forEach(k => { indicator[k].destroy = jest.fn(); });
         indicator._commonFavorite = {destroy: jest.fn()};
         indicator._signals = {disconnectAll: jest.fn(() => order.push('signals'))};
         return {indicator, order};
@@ -447,7 +537,7 @@ describe('VpnIndicator.destroy', () => {
     it('cancels first, then destroys its Vpn, disconnects signals and releases references', () => {
         const {indicator, order} = destroyable();
         const vpn = indicator._vpn;
-        const menus = [indicator._countryMenu, indicator._cityMenu, indicator._serverMenu];
+        const menus = [indicator._countryMenu, indicator._cityMenu, indicator._serverMenu, indicator._groupMenu];
         indicator.destroy();
         expect(order).toEqual(['vpn-after-cancel', 'signals']);
         expect(vpn.destroy).toHaveBeenCalledTimes(1);

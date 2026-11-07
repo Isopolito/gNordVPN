@@ -345,7 +345,7 @@ export default class StylesManager {
     _createSpinRow(title, read, write) {
         const row = new Adw.SpinRow({
             title,
-            adjustment: new Gtk.Adjustment({lower: 0, upper: 100, step_increment: 1, page_increment: 5, value: 0}),
+            adjustment: new Gtk.Adjustment({lower: -100, upper: 100, step_increment: 1, page_increment: 5, value: 0}),
         });
         row.connect('notify::value', () => {
             if (this._syncing) return;

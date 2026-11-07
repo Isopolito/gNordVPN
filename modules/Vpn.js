@@ -11,6 +11,7 @@ const CMD_VPNSTATUS = `nordvpn status`;
 const CMD_VPNACCOUNT = `nordvpn account`;
 const CMD_COUNTRIES = `nordvpn countries`;
 const CMD_CITIES = `nordvpn cities`;
+const CMD_GROUPS = `nordvpn groups`;
 const CMD_SETTINGS = `nordvpn s`;
 const CMD_FETCH_SETTINGS = `nordvpn settings`;
 const CMD_AUTOCONNECT_ON = `nordvpn set autoconnect on `;
@@ -19,6 +20,13 @@ const CMD_CONNECT = `nordvpn c`;
 const CMD_DISCONNECT = `nordvpn d`;
 const CMD_LOGIN = `nordvpn login`;
 const CMD_LOGOUT = `nordvpn logout`;
+
+const SERVER_API_PROTOCOLS = {
+    nordlynx: `wireguard_udp`,
+    nordwhisper: `wireguard_udp`,
+    openvpn_udp: `openvpn_udp`,
+    openvpn_tcp: `openvpn_tcp`,
+};
 
 Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
 
@@ -93,8 +101,9 @@ export default class Vpn {
             const settingValue = this._vpnUtils.resolveSettingsValue(parts[1]);
             if (!settingName || settingValue === undefined) continue;
 
-            if (settingName === `protocol` || settingName === 'technology') {
-                this._settings.set_string(settingName, settingValue);
+            if (settingName === `connection-protocol`) {
+                const protocol = this._vpnUtils.resolveProtocolValue(settingValue);
+                if (protocol) this._settings.set_string(settingName, protocol);
             } else {
                 this._settings.set_boolean(settingName, settingValue);
             }
@@ -107,33 +116,38 @@ export default class Vpn {
         const firewall = this._settings.get_boolean(`firewall`);
         const analytics = this._settings.get_boolean(`analytics`);
         const autoconnect = this._settings.get_boolean(`autoconnect`);
-        const cybersec = this._settings.get_boolean(`cybersec`);
+        const protection = this._settings.get_boolean(`protection`);
         const killswitch = this._settings.get_boolean(`killswitch`);
-        const obfuscate = this._settings.get_boolean(`obfuscate`);
-        const ipv6 = this._settings.get_boolean(`ipv6`);
         const notify = this._settings.get_boolean(`notify`);
-        const protocol = this._settings.get_string(`protocol`);
-        const technology = this._settings.get_string(`technology`);
+        const lanDiscovery = this._settings.get_boolean(`lan-discovery`);
+        const postQuantum = this._settings.get_boolean(`post-quantum`);
+        const protocol = this._settings.get_string(`connection-protocol`);
 
         if (!await this._isDaemonRunning()) return;
 
         // Each setting is applied independently: some are rejected when conditionally invalid
-        // (e.g., obfuscate is unsupported with NordLynx).
+        // (e.g., post-quantum is unsupported outside NordLynx).
         const t = this._log.startTimer();
         await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
         await this._execBestEffort(`${CMD_SETTINGS} analytics ${analytics}`);
         await this._execBestEffort(`${CMD_SETTINGS} autoconnect ${autoconnect}`);
-        await this._execBestEffort(`${CMD_SETTINGS} cybersec ${cybersec}`);
+        await this._execBestEffort(`${CMD_SETTINGS} protection ${protection}`);
         await this._execBestEffort(`${CMD_SETTINGS} killswitch ${killswitch}`);
-        await this._execBestEffort(`${CMD_SETTINGS} obfuscate ${obfuscate}`);
-        await this._execBestEffort(`${CMD_SETTINGS} ipv6 ${ipv6}`);
         await this._execBestEffort(`${CMD_SETTINGS} notify ${notify}`);
-        await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
-        await this._execBestEffort(`${CMD_SETTINGS} technology ${technology}`);
+        await this._execBestEffort(`${CMD_SETTINGS} lan-discovery ${lanDiscovery}`);
+        // Post-quantum only works on NordLynx: switch protocol first when moving to NordLynx,
+        // but turn post-quantum off before leaving it.
+        if (protocol === `nordlynx`) {
+            await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
+            await this._execBestEffort(`${CMD_SETTINGS} post-quantum ${postQuantum}`);
+        } else {
+            await this._execBestEffort(`${CMD_SETTINGS} post-quantum false`);
+            await this._execBestEffort(`${CMD_SETTINGS} protocol ${protocol}`);
+        }
 
         // Firewall is set a second time because the settings only took effect with the repeat; the reason has not been found.
         await this._execBestEffort(`${CMD_SETTINGS} firewall ${firewall}`);
-        this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 11});
+        this._log.endTimer(t, 'SPAN', {operation: 'applySettingsToNord', subCalls: 10});
     }
 
     async getAccount() {
@@ -284,6 +298,7 @@ export default class Vpn {
             case 'countries': return this.getCountries(false, running);
             case 'cities':    return this.getCities(running);
             case 'servers':   return this.getServers(running);
+            case 'groups':    return this.getGroups(running);
         }
         return null;
     }
@@ -320,6 +335,19 @@ export default class Vpn {
         return processedCountries;
     }
 
+    async getGroups(running = true) {
+        const standardOut = await this._execAsyncIfRunning(CMD_GROUPS, running);
+        const processedGroups = {};
+        for (const line of standardOut.split(`\n`)) {
+            const names = line.trim().split(/\s+/);
+            if (!names.every(name => /^[A-Za-z0-9_]+$/.test(name))) continue;
+            for (const name of names) processedGroups[name.replace(/_/g, ` `)] = name;
+        }
+
+        if (Object.keys(processedGroups).length === 0) return null;
+        return processedGroups;
+    }
+
     async getCities(running = true) {
         const citiesMax = this._settings.get_value('number-cities-per-countries').unpack() - 1;
         const citiesSaved = this._settings.get_value('countries-selected-for-cities').deep_unpack();
@@ -349,22 +377,8 @@ export default class Vpn {
         const countriesSaved = this._settings.get_value('countries-selected-for-servers').deep_unpack();
 
         let url = `https://api.nordvpn.com/v1/servers/recommendations?limit=` + countriesMax;
-        const technology = this._settings.get_string(`technology`);
-        if (technology === 'NORDLYNX') {
-            url += `&filters[servers_technologies][identifier]=wireguard_udp`;
-
-        } else if (technology === 'OPENVPN') {
-            const obfuscate = this._settings.get_boolean(`obfuscate`);
-            const protocol = this._settings.get_string(`protocol`);
-
-            if (protocol === `UDP`) {
-                if (obfuscate) url += `&filters[servers_technologies][identifier]=openvpn_xor_udp`;
-                else url += `&filters[servers_technologies][identifier]=openvpn_udp`;
-            } else if (protocol === `TCP`) {
-                if (obfuscate) url += `&filters[servers_technologies][identifier]=openvpn_xor_tcp`;
-                else url += `&filters[servers_technologies][identifier]=openvpn_tcp`;
-            }
-        }
+        const apiIdentifier = SERVER_API_PROTOCOLS[this._settings.get_string(`connection-protocol`)];
+        if (apiIdentifier) url += `&filters[servers_technologies][identifier]=${apiIdentifier}`;
 
         url += `&filters[servers_groups][identifier]=legacy_standard`;
 
