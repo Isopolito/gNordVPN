@@ -112,14 +112,14 @@ describe('GnordVpnPrefs', () => {
             try {
                 const {settings} = await buildPrefs({settings: {
                     autoconnect: true, commonfavorite: true, showlogin: false, showlogout: true,
-                    firewall: true, protocol: 'TCP', technology: 'NORDLYNX', showgroups: false,
+                    firewall: true, 'connection-protocol': 'openvpn_tcp', showgroups: false,
                     'number-cities-per-countries': 3, 'number-servers-per-countries': 4,
                 }});
                 buttonLabelled('Reset All Settings').click();
 
                 expect(spy).toHaveBeenCalledTimes(1);
-                for (const key of ['autoconnect', 'commonfavorite', 'showgroups', 'showlogin', 'showlogout', 'firewall', 'protocol',
-                    'technology', 'number-cities-per-countries', 'number-servers-per-countries']) {
+                for (const key of ['autoconnect', 'commonfavorite', 'showgroups', 'showlogin', 'showlogout', 'firewall',
+                    'connection-protocol', 'number-cities-per-countries', 'number-servers-per-countries']) {
                     expect({key, value: settings.get_value(key).deep_unpack()})
                         .toEqual({key, value: settings.get_default_value(key).deep_unpack()});
                 }
@@ -172,12 +172,13 @@ describe('GnordVpnPrefs', () => {
     describe('Connection page', () => {
         const SWITCHES = {
             'Autoconnect to VPN on startup': 'autoconnect',
-            'CyberSec': 'cybersec',
+            'Real-time protection': 'protection',
             'Firewall': 'firewall',
             'Killswitch': 'killswitch',
-            'Obfuscate': 'obfuscate',
+            'LAN discovery': 'lan-discovery',
+            'Post-quantum encryption': 'post-quantum',
+            'Notifications': 'notify',
             'Analytics': 'analytics',
-            'IPv6': 'ipv6',
         };
 
         it.each(Object.entries(SWITCHES))('switch "%s" writes %s', async (title, key) => {
@@ -199,59 +200,58 @@ describe('GnordVpnPrefs', () => {
             expect(group).toBeDefined();
         });
 
-        it('technology row writes OPENVPN / NORDLYNX', async () => {
-            const {settings} = await buildPrefs({settings: {technology: 'OPENVPN'}});
-            const tech = comboRow('Technology');
-            expect(tech.model.strings).toEqual(['OpenVpn', 'NordLynx']);
-            expect(tech.selected).toBe(0);
-
-            tech.selected = 1;
-            expect(settings.get_string('technology')).toBe('NORDLYNX');
-            tech.selected = 0;
-            expect(settings.get_string('technology')).toBe('OPENVPN');
+        it('removed settings have no row', async () => {
+            await buildPrefs();
+            for (const title of ['Technology', 'CyberSec', 'Obfuscate', 'IPv6']) {
+                expect(findAll(Adw.PreferencesGroup).flatMap(g => g.children).some(r => r.title === title)).toBe(false);
+            }
         });
 
-        it('protocol row writes UDP / TCP', async () => {
+        it('protocol row offers the four CLI protocols and writes the CLI value', async () => {
             const {settings} = await buildPrefs();
             const proto = comboRow('Protocol');
+            expect(proto.model.strings).toEqual(['NordLynx', 'OpenVPN (UDP)', 'OpenVPN (TCP)', 'NordWhisper']);
             expect(proto.selected).toBe(0);
-            proto.selected = 1;
-            expect(settings.get_string('protocol')).toBe('TCP');
-            proto.selected = 0;
-            expect(settings.get_string('protocol')).toBe('UDP');
+
+            const values = ['nordlynx', 'openvpn_udp', 'openvpn_tcp', 'nordwhisper'];
+            for (const i of [1, 2, 3, 0]) {
+                proto.selected = i;
+                expect(settings.get_string('connection-protocol')).toBe(values[i]);
+            }
         });
 
-        it('a fresh install (schema defaults) shows OpenVPN', async () => {
+        it('a fresh install (schema defaults) shows NordLynx', async () => {
             await buildPrefs();
-            expect(comboRow('Technology').selected).toBe(0);
+            expect(comboRow('Protocol').selected).toBe(0);
         });
 
-        it('OPENVPN enables obfuscate and protocol; NORDLYNX disables them', async () => {
-            await buildPrefs({settings: {technology: 'OPENVPN'}});
-            const [obfuscate, proto, tech] = [switchRow('Obfuscate'), comboRow('Protocol'), comboRow('Technology')];
-            expect([obfuscate.sensitive, proto.sensitive]).toEqual([true, true]);
+        it('post-quantum is sensitive only for NordLynx', async () => {
+            await buildPrefs();
+            const [pq, proto] = [switchRow('Post-quantum encryption'), comboRow('Protocol')];
+            expect(pq.sensitive).toBe(true);
 
-            tech.selected = 1;
-            expect([obfuscate.sensitive, proto.sensitive]).toEqual([false, false]);
-            tech.selected = 0;
-            expect([obfuscate.sensitive, proto.sensitive]).toEqual([true, true]);
+            proto.selected = 2;
+            expect(pq.sensitive).toBe(false);
+            proto.selected = 3;
+            expect(pq.sensitive).toBe(false);
+            proto.selected = 0;
+            expect(pq.sensitive).toBe(true);
         });
 
-        it('starts with obfuscate and protocol disabled when technology is NORDLYNX', async () => {
-            await buildPrefs({settings: {technology: 'NORDLYNX'}});
-            expect(switchRow('Obfuscate').sensitive).toBe(false);
-            expect(comboRow('Protocol').sensitive).toBe(false);
+        it('starts with post-quantum insensitive when the stored protocol is not NordLynx', async () => {
+            await buildPrefs({settings: {'connection-protocol': 'openvpn_udp'}});
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(false);
         });
 
-        it('refreshes the rows from `nordvpn settings` after the async sync', async () => {
+        it('refreshes the protocol row from `nordvpn settings` after the async sync', async () => {
             const {settings} = await buildPrefs({
-                settings: {technology: 'OPENVPN', protocol: 'UDP'},
-                cli: {'nordvpn status': 'Status: Disconnected', 'nordvpn settings': 'Technology: NORDLYNX\nProtocol: TCP\n'},
+                settings: {'connection-protocol': 'openvpn_udp'},
+                cli: {'nordvpn status': 'Status: Disconnected', 'nordvpn settings': 'Protocol: NordLynx\nPost-quantum VPN: enabled\n'},
             });
-            expect(settings.get_string('technology')).toBe('NORDLYNX');
-            expect(comboRow('Technology').selected).toBe(1);
-            expect(comboRow('Protocol').selected).toBe(1);
-            expect(comboRow('Protocol').sensitive).toBe(false);
+            expect(settings.get_string('connection-protocol')).toBe('nordlynx');
+            expect(settings.get_boolean('post-quantum')).toBe(true);
+            expect(comboRow('Protocol').selected).toBe(0);
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(true);
         });
 
         it('Apply calls applySettingsToNord once and is disabled while it runs', async () => {
@@ -271,21 +271,19 @@ describe('GnordVpnPrefs', () => {
             expect(spy).toHaveBeenCalledTimes(1);
         });
 
-        it('Reset Connection Settings restores the schema defaults, ending on OPENVPN', async () => {
+        it('Reset Connection Settings restores the schema defaults, ending on NordLynx', async () => {
             const {settings} = await buildPrefs({settings: {
-                cybersec: true, firewall: true, killswitch: true, obfuscate: true, notify: true, ipv6: true,
-                protocol: 'TCP', technology: 'NORDLYNX',
+                protection: true, firewall: true, killswitch: true, notify: true, 'lan-discovery': true, 'post-quantum': true,
+                'connection-protocol': 'openvpn_tcp',
             }});
             buttonLabelled('Reset Connection Settings').click();
 
-            for (const key of ['cybersec', 'firewall', 'killswitch', 'obfuscate', 'notify', 'ipv6', 'protocol']) {
+            for (const key of ['protection', 'firewall', 'killswitch', 'notify', 'lan-discovery', 'post-quantum', 'connection-protocol']) {
                 expect({key, value: settings.get_value(key).deep_unpack()})
                     .toEqual({key, value: settings.get_default_value(key).deep_unpack()});
             }
-            expect(settings.get_string('technology')).toBe('OPENVPN');
-            expect(comboRow('Technology').selected).toBe(0);
             expect(comboRow('Protocol').selected).toBe(0);
-            expect(comboRow('Protocol').sensitive).toBe(true);
+            expect(switchRow('Post-quantum encryption').sensitive).toBe(true);
         });
     });
 

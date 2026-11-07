@@ -6,14 +6,13 @@ const DEFAULTS = {
     'commonfavorite': true,
     'showlogin': true,
     'showlogout': true,
-    'cybersec': false,
+    'protection': false,
     'firewall': true,
     'killswitch': false,
-    'obfuscate': false,
     'notify': true,
-    'ipv6': false,
-    'protocol': 'UDP',
-    'technology': 'NORDLYNX',
+    'lan-discovery': false,
+    'post-quantum': false,
+    'connection-protocol': 'nordlynx',
     'number-cities-per-countries': 5,
     'countries-selected-for-cities': ['United_States', 'Germany'],
     'number-servers-per-countries': 5,
@@ -44,35 +43,30 @@ describe('ResetManager', () => {
 
     describe('resetConnectionSettings', () => {
         it('resets connection keys to their defaults', () => {
-            const settings = createSettings({firewall: false, killswitch: true, ipv6: true, protocol: 'TCP', technology: 'OPENVPN'});
-            manager.resetConnectionSettings(settings, createRow(), createRow());
-            expect(settings.values).toMatchObject({firewall: true, killswitch: false, ipv6: false, protocol: 'UDP', technology: 'NORDLYNX'});
+            const settings = createSettings({
+                firewall: false, killswitch: true, protection: true, 'lan-discovery': true, 'post-quantum': true,
+                notify: false, 'connection-protocol': 'openvpn_tcp',
+            });
+            manager.resetConnectionSettings(settings, createRow());
+            expect(settings.values).toMatchObject({
+                firewall: true, killswitch: false, protection: false, 'lan-discovery': false, 'post-quantum': false,
+                notify: true, 'connection-protocol': 'nordlynx',
+            });
         });
 
-        it('restores the combo rows: UDP is index 0, anything else is 1', () => {
-            const settings = createSettings({protocol: 'TCP', technology: 'OPENVPN'});
+        it('restores the combo row to the index of the default protocol', () => {
+            const settings = createSettings({'connection-protocol': 'openvpn_tcp'});
             const proto = createRow();
-            const tech = createRow();
-            manager.resetConnectionSettings(settings, proto, tech);
-            // defaults are UDP + NORDLYNX
-            expect([proto.selected, tech.selected]).toEqual([0, 1]);
+            manager.resetConnectionSettings(settings, proto);
+            expect(proto.selected).toBe(0);
         });
 
-        it('sets the technology combo to 0 when the default technology is OPENVPN', () => {
+        it('selects the matching index when the default protocol is not the first entry', () => {
             const settings = createSettings();
-            settings.get_default_value.mockImplementation((key) => variant(key === 'technology' ? 'OPENVPN' : DEFAULTS[key]));
+            settings.get_default_value.mockImplementation((key) => variant(key === 'connection-protocol' ? 'openvpn_tcp' : DEFAULTS[key]));
             const proto = createRow();
-            const tech = createRow();
-            manager.resetConnectionSettings(settings, proto, tech);
-            expect(tech.selected).toBe(0);
-        });
-
-        it('sets the protocol combo to 1 when the default protocol is TCP', () => {
-            const settings = createSettings();
-            settings.get_default_value.mockImplementation((key) => variant(key === 'protocol' ? 'TCP' : DEFAULTS[key]));
-            const proto = createRow();
-            manager.resetConnectionSettings(settings, proto, createRow());
-            expect(proto.selected).toBe(1);
+            manager.resetConnectionSettings(settings, proto);
+            expect(proto.selected).toBe(2);
         });
     });
 
@@ -112,7 +106,7 @@ describe('ResetManager', () => {
             const cityPicker = createPicker();
             const serverPicker = createPicker();
 
-            manager.resetAllSettings(settings, createRow(), createRow(), cityPicker, serverPicker);
+            manager.resetAllSettings(settings, createRow(), cityPicker, serverPicker);
 
             expect(settings.values).toMatchObject(DEFAULTS);
             expect(cityPicker.refresh).toHaveBeenCalledTimes(1);

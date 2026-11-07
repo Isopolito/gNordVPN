@@ -21,7 +21,7 @@
 - 🧩 **Server groups**: Connect to server groups such as Double VPN or Onion Over VPN, with favorites.
 - ⭐ **Favorites**: Pin commonly used countries, cities, servers, and groups for quicker access.
 - ✅ **Searchable country lists**: The Cities and Servers pages use a searchable checklist, so no modifier keys are needed to select several countries.
-- ⚙️ **Connection preferences**: Configure options such as auto-connect, protocol, and technology from the extension settings.
+- ⚙️ **Connection preferences**: Configure options such as auto-connect, protocol, real-time protection, LAN discovery, post-quantum encryption, and notifications from the extension settings.
 - 🧭 **Panel customization**: Move the indicator to the left, center, or right side of the top bar.
 - 🎨 **Style overrides**: A Styles page with a live preview, Size and Theme presets, Shape controls (corners, bold, border, spacing), and per-state colors and panel text. An Advanced CSS section is the fallback for anything the controls don't cover.
 

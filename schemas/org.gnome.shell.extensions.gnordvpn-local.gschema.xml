@@ -71,32 +71,33 @@
         <key name="autoconnect" type="b">
             <default>false</default>
         </key>
-        <key name="cybersec" type="b">
-            <default>false</default>
-        </key>
         <key name="firewall" type="b">
             <default>false</default>
         </key>
         <key name="killswitch" type="b">
             <default>false</default>
         </key>
-        <key name="obfuscate" type="b">
-            <default>false</default>
-        </key>
         <key name="analytics" type="b">
-            <default>false</default>
-        </key>
-        <key name="ipv6" type="b">
             <default>false</default>
         </key>
         <key name="notify" type="b">
             <default>false</default>
         </key>
-        <key name="protocol" type="s">
-            <default>"UDP"</default>
+        <key name="connection-protocol" type="s">
+            <default>"nordlynx"</default>
+            <summary>Connection protocol passed to nordvpn set protocol</summary>
         </key>
-        <key name="technology" type="s">
-            <default>"OPENVPN"</default>
+        <key name="protection" type="b">
+            <default>false</default>
+            <summary>Real-time protection</summary>
+        </key>
+        <key name="lan-discovery" type="b">
+            <default>false</default>
+            <summary>LAN discovery</summary>
+        </key>
+        <key name="post-quantum" type="b">
+            <default>false</default>
+            <summary>Post-quantum encryption (NordLynx only)</summary>
         </key>
         <key name="showlogin" type="b">
             <default>true</default>

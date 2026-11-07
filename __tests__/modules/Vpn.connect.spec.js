@@ -79,9 +79,7 @@ describe('Vpn.getServers URL construction', () => {
         const settings = createFakeSettings({
             'number-servers-per-countries': 5,
             'countries-selected-for-servers': [81],
-            technology: 'NORDLYNX',
-            protocol: 'UDP',
-            obfuscate: false,
+            'connection-protocol': 'nordlynx',
             ...settingValues,
         });
         const vpn = createVpn({settings});
@@ -91,26 +89,18 @@ describe('Vpn.getServers URL construction', () => {
     }
 
     it.each([
-        ['NORDLYNX', 'UDP', false, '&filters[servers_technologies][identifier]=wireguard_udp'],
-        ['NORDLYNX', 'TCP', true, '&filters[servers_technologies][identifier]=wireguard_udp'],
-        ['OPENVPN', 'UDP', false, '&filters[servers_technologies][identifier]=openvpn_udp'],
-        ['OPENVPN', 'UDP', true, '&filters[servers_technologies][identifier]=openvpn_xor_udp'],
-        ['OPENVPN', 'TCP', false, '&filters[servers_technologies][identifier]=openvpn_tcp'],
-        ['OPENVPN', 'TCP', true, '&filters[servers_technologies][identifier]=openvpn_xor_tcp'],
-    ])('technology=%s protocol=%s obfuscate=%s', async (technology, protocol, obfuscate, filter) => {
-        const {vpn, urls} = serversVpn({technology, protocol, obfuscate});
+        ['nordlynx', '&filters[servers_technologies][identifier]=wireguard_udp'],
+        ['nordwhisper', '&filters[servers_technologies][identifier]=wireguard_udp'],
+        ['openvpn_udp', '&filters[servers_technologies][identifier]=openvpn_udp'],
+        ['openvpn_tcp', '&filters[servers_technologies][identifier]=openvpn_tcp'],
+    ])('connection-protocol=%s', async (protocol, filter) => {
+        const {vpn, urls} = serversVpn({'connection-protocol': protocol});
         await vpn.getServers();
         expect(urls).toEqual([BASE + filter + GROUP + '&filters[country_id]=81']);
     });
 
-    it('adds no technology filter for an unrecognised technology', async () => {
-        const {vpn, urls} = serversVpn({technology: 'NAKED'});
-        await vpn.getServers();
-        expect(urls).toEqual([BASE + GROUP + '&filters[country_id]=81']);
-    });
-
-    it('adds no technology filter for OPENVPN with an unrecognised protocol', async () => {
-        const {vpn, urls} = serversVpn({technology: 'OPENVPN', protocol: 'QUIC'});
+    it('adds no technology filter for an unrecognised protocol', async () => {
+        const {vpn, urls} = serversVpn({'connection-protocol': 'quic'});
         await vpn.getServers();
         expect(urls).toEqual([BASE + GROUP + '&filters[country_id]=81']);
     });

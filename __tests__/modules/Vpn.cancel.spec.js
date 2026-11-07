@@ -27,7 +27,7 @@ function createRecordingProcCom({responses = {}, hold = {}} = {}) {
 
 const vpnWith = (procCom, settings = createFakeSettings({
     'number-cities-per-countries': 5, 'countries-selected-for-cities': ['Albania'], 'countries-selected-for-servers': [],
-    'number-servers-per-countries': 5, technology: 'NORDLYNX',
+    'number-servers-per-countries': 5, 'connection-protocol': 'nordlynx',
 })) => {
     const vpn = createVpn({procCom, settings});
     vpn._session = {abort: jest.fn()};
@@ -66,11 +66,11 @@ describe('Vpn state-changing calls never carry a cancellable', () => {
     it('applySettingsToNord, including its status probe', async () => {
         const procCom = createRecordingProcCom();
         const vpn = vpnWith(procCom, createFakeSettings({
-            firewall: true, analytics: false, autoconnect: true, cybersec: false, killswitch: true,
-            obfuscate: false, ipv6: true, notify: false, protocol: 'TCP', technology: 'OPENVPN',
+            firewall: true, analytics: false, autoconnect: true, protection: false, killswitch: true,
+            notify: false, 'lan-discovery': true, 'post-quantum': false, 'connection-protocol': 'openvpn_tcp',
         }));
         await vpn.applySettingsToNord();
-        expect(procCom.calls).toHaveLength(12);
+        expect(procCom.calls).toHaveLength(11);
         expect(procCom.calls.every(c => c.cancellable === null)).toBe(true);
     });
 });
@@ -101,7 +101,7 @@ describe('Vpn.destroy', () => {
         ['getServers', (v) => v.getServers(true)],
     ])('rejects a cancelled HTTP lookup: %s', async (name, call) => {
         const settings = createFakeSettings({
-            'number-servers-per-countries': 5, 'countries-selected-for-servers': [1], technology: 'NORDLYNX',
+            'number-servers-per-countries': 5, 'countries-selected-for-servers': [1], 'connection-protocol': 'nordlynx',
         });
         const vpn = vpnWith(createRecordingProcCom(), settings);
         vpn._httpGet = async () => { throw cancelledError(); };
@@ -131,14 +131,14 @@ describe('Vpn.destroy', () => {
         let release;
         const procCom = createRecordingProcCom({hold: {[STATUS]: new Promise(r => { release = r; })}});
         const vpn = vpnWith(procCom, createFakeSettings({
-            firewall: true, analytics: false, autoconnect: true, cybersec: false, killswitch: true,
-            obfuscate: false, ipv6: true, notify: false, protocol: 'TCP', technology: 'OPENVPN',
+            firewall: true, analytics: false, autoconnect: true, protection: false, killswitch: true,
+            notify: false, 'lan-discovery': true, 'post-quantum': false, 'connection-protocol': 'openvpn_tcp',
         }));
         const pending = vpn.applySettingsToNord();
         vpn.destroy();
         release();
         await pending;
-        expect(procCom.calls).toHaveLength(12);
+        expect(procCom.calls).toHaveLength(11);
     });
 });
 

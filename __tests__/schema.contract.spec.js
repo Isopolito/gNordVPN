@@ -59,12 +59,12 @@ const {reads, writes, other} = scanKeys();
 
 describe('schema contract', () => {
     it('the scanner finds the calls it is meant to find', () => {
-        expect(reads.has('technology')).toBe(true);
+        expect(reads.has('connection-protocol')).toBe(true);
         expect(reads.has('refresh-timeout')).toBe(true);          // VpnIndicator + bind
         expect(reads.has('number-cities-per-countries')).toBe(true); // bind only in prefs
         expect(reads.has('favorite-cities')).toBe(true);          // via constants
         expect(writes.has('panel-appearance')).toBe(true);
-        expect(other.has('protocol')).toBe(true);                 // ResetManager list
+        expect(other.has('connection-protocol')).toBe(true);      // ResetManager list
         expect(reads.size).toBeGreaterThan(20);
     });
 
@@ -104,35 +104,30 @@ describe('schema contract', () => {
     });
 
     describe('string keys with a fixed set of values', () => {
-        // The selectable values are the ones the prefs combo rows offer.
-        const prefsSrc = sources[path.join('modules', 'prefs', 'GnordVpnPrefs.js')];
-        const comboValues = (name) => {
-            const list = new RegExp(`const ${name} = \\[(.*)\\];`).exec(prefsSrc)?.[1] ?? '';
-            return matchAll(/\['([^']+)',/g, list).map(m => m[1]);
-        };
-        const technologies = comboValues('TECHNOLOGIES');
-        const protocols = comboValues('PROTOCOLS');
+        // The selectable values are the ones the prefs combo row offers.
+        const constantsSrc = sources[path.join('modules', 'constants.js')];
+        const list = /export const PROTOCOLS = \[(.*)\];/.exec(constantsSrc)?.[1] ?? '';
+        const protocols = matchAll(/\['([^']+)',/g, list).map(m => m[1]);
 
         it('finds the combo row values', () => {
-            expect(technologies).toEqual(['OPENVPN', 'NORDLYNX']);
-            expect(protocols).toEqual(['UDP', 'TCP']);
+            expect(protocols).toEqual(['nordlynx', 'openvpn_udp', 'openvpn_tcp', 'nordwhisper']);
         });
 
-        it('technology default is one of the values the code compares against', () => {
-            expect(technologies).toContain(parseVariantText(schema.keys.technology.defaultText));
+        it('connection-protocol default is one of the offered values', () => {
+            expect(protocols).toContain(parseVariantText(schema.keys['connection-protocol'].defaultText));
         });
 
-        it('protocol default is one of the values the code compares against', () => {
-            expect(protocols).toContain(parseVariantText(schema.keys.protocol.defaultText));
-        });
-
-        it('every technology literal the code compares against is an offered value', () => {
-            const compared = new Set();
-            for (const src of Object.values(sources)) {
-                for (const m of matchAll(/\b(?:tech|technology)\s*===?\s*(['"`])([A-Za-z]+)\1/g, src)) compared.add(m[2]);
+        it('every new connection key is read', () => {
+            for (const key of ['connection-protocol', 'protection', 'lan-discovery', 'post-quantum']) {
+                expect({key, read: reads.has(key)}).toEqual({key, read: true});
             }
-            expect(compared.size).toBeGreaterThan(0);
-            for (const v of compared) expect(technologies).toContain(v);
+        });
+
+        it('every protocol the Servers filter maps is an offered value', () => {
+            const vpnSrc = sources[path.join('modules', 'Vpn.js')];
+            const block = /SERVER_API_PROTOCOLS = \{([^}]*)\}/.exec(vpnSrc)?.[1] ?? '';
+            const mapped = matchAll(/^\s*(\w+):/gm, block).map(m => m[1]);
+            expect(mapped.sort()).toEqual([...protocols].sort());
         });
     });
 });

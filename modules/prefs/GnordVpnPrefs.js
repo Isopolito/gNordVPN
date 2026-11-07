@@ -9,11 +9,10 @@ import StylesManager from './StylesManager.js';
 import ResetManager from './ResetManager.js';
 import CountryPicker from './CountryPicker.js';
 import * as Common from '../common.js';
+import {PROTOCOLS} from '../constants.js';
 import Logger from '../Logger.js';
 
 const PANEL_POSITIONS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right']];
-const TECHNOLOGIES = [['OPENVPN', 'OpenVpn'], ['NORDLYNX', 'NordLynx']];
-const PROTOCOLS = [['UDP', 'UDP'], ['TCP', 'TCP']];
 
 export default class GnordVpnPrefs {
     constructor(settings, metadata = {}) {
@@ -21,9 +20,8 @@ export default class GnordVpnPrefs {
         this._metadata = metadata;
         this._vpn = new Vpn(this._settings);
         this._log = new Logger('GnordVpnPrefs');
-        this._techRow = null;
         this._protoRow = null;
-        this._obfuscateRow = null;
+        this._postQuantumRow = null;
         this._countryMapWithID = null;
         this._countryMap = null;
     }
@@ -141,28 +139,25 @@ export default class GnordVpnPrefs {
     _createConnectionsPage(page) {
         const group = new Adw.PreferencesGroup({description: 'Changes are sent to NordVPN when you press Apply.'});
 
-        const onTechChange = (technology) => {
-            const isOpenVpn = technology === 'OPENVPN';
-            this._obfuscateRow.sensitive = isOpenVpn;
-            this._protoRow.sensitive = isOpenVpn;
+        const onProtocolChange = (protocol) => {
+            this._postQuantumRow.sensitive = protocol === 'nordlynx';
         };
 
-        this._techRow = this._createChoiceRow('Technology', TECHNOLOGIES, 'technology', onTechChange);
-        this._protoRow = this._createChoiceRow('Protocol', PROTOCOLS, 'protocol');
-        this._obfuscateRow = this._createSwitchRow('Obfuscate', 'obfuscate');
+        this._protoRow = this._createChoiceRow('Protocol', PROTOCOLS, 'connection-protocol', onProtocolChange);
+        this._postQuantumRow = this._createSwitchRow('Post-quantum encryption', 'post-quantum', 'NordLynx only');
 
-        group.add(this._techRow);
+        group.add(this._protoRow);
         group.add(this._createSwitchRow('Autoconnect to VPN on startup', 'autoconnect'));
-        group.add(this._createSwitchRow('CyberSec', 'cybersec'));
+        group.add(this._createSwitchRow('Real-time protection', 'protection'));
         group.add(this._createSwitchRow('Firewall', 'firewall'));
         group.add(this._createSwitchRow('Killswitch', 'killswitch'));
-        group.add(this._obfuscateRow);
+        group.add(this._createSwitchRow('LAN discovery', 'lan-discovery'));
+        group.add(this._postQuantumRow);
+        group.add(this._createSwitchRow('Notifications', 'notify'));
         group.add(this._createSwitchRow('Analytics', 'analytics', 'Send anonymous usage data to NordVPN'));
-        group.add(this._createSwitchRow('IPv6', 'ipv6'));
-        group.add(this._protoRow);
         page.add(group);
 
-        onTechChange(this._settings.get_string('technology'));
+        onProtocolChange(this._settings.get_string('connection-protocol'));
 
         const apply = new Gtk.Button({label: 'Apply'});
         apply.add_css_class('suggested-action');
@@ -219,8 +214,7 @@ export default class GnordVpnPrefs {
 
         // The rows read their keys at construction, so refresh them once the async sync resolves.
         this._vpn.setSettingsFromNord().then(() => {
-            if (this._techRow) this._techRow.selected = this._choiceIndex(TECHNOLOGIES, this._settings.get_string('technology'));
-            if (this._protoRow) this._protoRow.selected = this._choiceIndex(PROTOCOLS, this._settings.get_string('protocol'));
+            if (this._protoRow) this._protoRow.selected = this._choiceIndex(PROTOCOLS, this._settings.get_string('connection-protocol'));
         }).catch(e => this._log.error('setSettingsFromNord failed', e));
 
         const generalPage = new Adw.PreferencesPage();
@@ -290,11 +284,11 @@ export default class GnordVpnPrefs {
 
         const resetManager = new ResetManager();
         resetAll.connect('clicked', () => {
-            resetManager.resetAllSettings(this._settings, this._protoRow, this._techRow, this._cityPicker, this._serverPicker);
+            resetManager.resetAllSettings(this._settings, this._protoRow, this._cityPicker, this._serverPicker);
         });
 
         resetConnection.connect('clicked', () => {
-            resetManager.resetConnectionSettings(this._settings, this._protoRow, this._techRow);
+            resetManager.resetConnectionSettings(this._settings, this._protoRow);
         });
 
         this._setWindowSize(window);

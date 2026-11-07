@@ -36,3 +36,5 @@ export const states = {
     'LOGGING_IN':    'Status: Logging in',
     'LOGGING_OUT':   'Status: Logging out',
 };
+
+export const PROTOCOLS = [['nordlynx', 'NordLynx'], ['openvpn_udp', 'OpenVPN (UDP)'], ['openvpn_tcp', 'OpenVPN (TCP)'], ['nordwhisper', 'NordWhisper']];

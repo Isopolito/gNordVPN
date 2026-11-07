@@ -1,19 +1,18 @@
+import {PROTOCOLS} from '../constants.js';
+
 export default class ResetManager {
-    resetAllSettings(settings, protoRow, techRow, cityPicker, serverPicker) {
+    resetAllSettings(settings, protoRow, cityPicker, serverPicker) {
         this._resetGeneralSetting(settings);
         this._resetAccountSetting(settings);
-        this.resetConnectionSettings(settings, protoRow, techRow);
+        this.resetConnectionSettings(settings, protoRow);
         this._resetCitySetting(settings, cityPicker);
         this.resetServerSetting(settings, serverPicker);
     }
-    resetConnectionSettings(settings, protoRow, techRow) {
-        this._resetSetting(settings, ['cybersec', 'firewall', 'killswitch', 'obfuscate', 'notify', 'ipv6', 'protocol', 'technology']);
+    resetConnectionSettings(settings, protoRow) {
+        this._resetSetting(settings, ['protection', 'firewall', 'killswitch', 'notify', 'lan-discovery', 'post-quantum', 'connection-protocol']);
 
-        const protocol = settings.get_string(`protocol`);
-        protoRow.selected = protocol === 'UDP' ? 0 : 1;
-
-        const tech = settings.get_string(`technology`);
-        techRow.selected = tech === 'OPENVPN' ? 0 : 1;
+        const protocol = settings.get_string(`connection-protocol`);
+        protoRow.selected = Math.max(0, PROTOCOLS.findIndex(([value]) => value === protocol));
     }
 
     _resetGeneralSetting(settings) {
